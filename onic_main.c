@@ -1,0 +1,306 @@
+/*
+ * Copyright (c) 2020 Xilinx, Inc.
+ * All rights reserved.
+ *
+ * This source code is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ */
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/types.h>
+#include <linux/errno.h>
+#include <linux/pci.h>
+#include <linux/etherdevice.h>
+#include <linux/netdevice.h>
+
+#include "onic.h"
+#include "onic_hardware.h"
+#include "onic_lib.h"
+#include "onic_common.h"
+#include "onic_netdev.h"
+
+#ifndef ONIC_VF
+#define DRV_STR "OpenNIC Linux Kernel Driver"
+char onic_drv_name[] = "open-nic";
+#else
+#define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
+char onic_drv_name[] = "open-nic-vf";
+#endif
+
+#define DRV_VER "0.1"
+const char onic_drv_str[] = DRV_STR;
+const char onic_drv_ver[] = DRV_VER;
+
+MODULE_AUTHOR("Xilinx Labs");
+MODULE_DESCRIPTION(DRV_STR);
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_VERSION(DRV_VER);
+
+static const struct pci_device_id onic_pci_tbl[] = {
+	/* Gen 3 PF */
+	/* PCIe lane width x1 */
+	{ PCI_DEVICE(0x10ee, 0x9031), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9131), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9231), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9331), },	/* PF 3 */
+	/* PCIe lane width x2 */
+	{ PCI_DEVICE(0x10ee, 0x9032), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9132), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9232), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9332), },	/* PF 3 */
+	/* PCIe lane width x4 */
+	{ PCI_DEVICE(0x10ee, 0x9034), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9134), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9234), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9334), },	/* PF 3 */
+	/* PCIe lane width x8 */
+	{ PCI_DEVICE(0x10ee, 0x9038), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9138), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9238), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9338), },	/* PF 3 */
+	/* PCIe lane width x16 */
+	{ PCI_DEVICE(0x10ee, 0x903f), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x913f), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x923f), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x933f), },	/* PF 3 */
+	/* { PCI_DEVICE(0x10ee, 0x6a9f), }, */	     /* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x6aa0), },	/* PF 1 */
+
+	/* Gen 4 PF */
+	/* PCIe lane width x1 */
+	{ PCI_DEVICE(0x10ee, 0x9041), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9141), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9241), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9341), },	/* PF 3 */
+	/* PCIe lane width x2 */
+	{ PCI_DEVICE(0x10ee, 0x9042), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9142), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9242), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9342), },	/* PF 3 */
+	/* PCIe lane width x4 */
+	{ PCI_DEVICE(0x10ee, 0x9044), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9144), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9244), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9344), },	/* PF 3 */
+	/* PCIe lane width x8 */
+	{ PCI_DEVICE(0x10ee, 0x9048), },	/* PF 0 */
+	{ PCI_DEVICE(0x10ee, 0x9148), },	/* PF 1 */
+	{ PCI_DEVICE(0x10ee, 0x9248), },	/* PF 2 */
+	{ PCI_DEVICE(0x10ee, 0x9348), },	/* PF 3 */
+
+	{0,}
+};
+
+MODULE_DEVICE_TABLE(pci, onic_pci_tbl);
+
+/**
+ * Default MAC address 00:0A:35:00:00:00
+ * First three octets indicate OUI (00:0A:35 for Xilinx)
+ * Note that LSB of the first octet must be 0 (unicast)
+ **/
+static const unsigned char onic_default_dev_addr[] = {
+	0x00, 0x0A, 0x35, 0x00, 0x00, 0x00
+};
+
+static const struct net_device_ops onic_netdev_ops = {
+	.ndo_open = onic_open_netdev,
+	.ndo_stop = onic_stop_netdev,
+	.ndo_start_xmit = onic_xmit_frame,
+	.ndo_set_mac_address = onic_set_mac_address,
+	.ndo_do_ioctl = onic_do_ioctl,
+	.ndo_change_mtu = onic_change_mtu,
+	.ndo_get_stats64 = onic_get_stats64,
+};
+
+extern void onic_set_ethtool_ops(struct net_device *netdev);
+
+/**
+ * onic_probe - Probe and initialize PCI device
+ * @pdev: pointer to PCI device
+ * @ent: pointer to PCI device ID entries
+ *
+ * Return 0 on success, negative on failure
+ **/
+static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+{
+	struct net_device *netdev;
+	struct onic_private *priv;
+	char dev_name[IFNAMSIZ];
+	char mac_addr[6];
+	int rv;
+	/* int pci_using_dac; */
+
+	rv = pci_enable_device_mem(pdev);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "pci_enable_device_mem, err = %d", rv);
+		return rv;
+	}
+
+	/* QDMA only supports 32-bit consistent DMA for descriptor ring */
+	rv = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
+	if (rv < 0) {
+		dev_err(&pdev->dev, "Failed to set DMA masks");
+		goto disable_device;
+	} else {
+		dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+	}
+
+	rv = pci_request_mem_regions(pdev, onic_drv_name);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "pci_request_mem_regions, err = %d", rv);
+		goto disable_device;
+	}
+
+	/* enable relaxed ordering */
+	pcie_capability_set_word(pdev, PCI_EXP_DEVCTL, PCI_EXP_DEVCTL_RELAX_EN);
+	/* enable extended tag */
+	pcie_capability_set_word(pdev, PCI_EXP_DEVCTL, PCI_EXP_DEVCTL_EXT_TAG);
+	pci_set_master(pdev);
+	pci_save_state(pdev);
+	pcie_set_readrq(pdev, 512);
+
+	netdev = alloc_etherdev_mq(sizeof(struct onic_private),
+				   ONIC_MAX_QUEUES);
+	if (!netdev) {
+		dev_err(&pdev->dev, "alloc_etherdev_mq failed");
+		rv = -ENOMEM;
+		goto release_pci_mem;
+	}
+
+	SET_NETDEV_DEV(netdev, &pdev->dev);
+	netdev->netdev_ops = &onic_netdev_ops;
+	onic_set_ethtool_ops(netdev);
+
+	snprintf(dev_name, IFNAMSIZ, "onic%ds%df%d",
+		 pdev->bus->number,
+		 PCI_SLOT(pdev->devfn),
+		 PCI_FUNC(pdev->devfn));
+	strlcpy(netdev->name, dev_name, sizeof(netdev->name));
+
+	memcpy(mac_addr, onic_default_dev_addr, 6);
+	mac_addr[3] = pdev->bus->number;
+	mac_addr[4] = PCI_SLOT(pdev->devfn);
+	mac_addr[5] = PCI_FUNC(pdev->devfn);
+	onic_set_mac_address(netdev, (void *)mac_addr);
+
+	priv = netdev_priv(netdev);
+	memset(priv, 0, sizeof(struct onic_private));
+
+	if (PCI_FUNC(pdev->devfn) == 0) {
+		dev_info(&pdev->dev, "device is a master PF");
+		set_bit(ONIC_FLAG_MASTER_PF, priv->flags);
+	}
+	priv->pdev = pdev;
+	priv->netdev = netdev;
+	spin_lock_init(&priv->tx_lock);
+	spin_lock_init(&priv->rx_lock);
+
+	rv = onic_init_capacity(priv);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "onic_init_capacity, err = %d", rv);
+		goto free_netdev;
+	}
+
+	rv = onic_init_hardware(priv);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "onic_init_hardware, err = %d", rv);
+		goto clear_capacity;
+	}
+
+	rv = onic_init_interrupt(priv);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "onic_init_interrupt, err = %d", rv);
+		goto clear_hardware;
+	}
+
+	netif_set_real_num_tx_queues(netdev, priv->num_tx_queues);
+	netif_set_real_num_rx_queues(netdev, priv->num_rx_queues);
+
+	rv = register_netdev(netdev);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "register_netdev, err = %d", rv);
+		goto clear_interrupt;
+	}
+
+	pci_set_drvdata(pdev, priv);
+	netif_carrier_off(netdev);
+	return 0;
+
+clear_interrupt:
+	onic_clear_interrupt(priv);
+clear_hardware:
+	onic_clear_hardware(priv);
+clear_capacity:
+	onic_clear_capacity(priv);
+free_netdev:
+	free_netdev(priv->netdev);
+release_pci_mem:
+	pci_release_mem_regions(pdev);
+disable_device:
+	pci_disable_device(pdev);
+
+	return rv;
+}
+
+/**
+ * onic_remove - remove PCI device
+ * @pdev: pointer to PCI device
+ **/
+static void onic_remove(struct pci_dev *pdev)
+{
+	struct onic_private *priv = pci_get_drvdata(pdev);
+
+	unregister_netdev(priv->netdev);
+
+	onic_clear_interrupt(priv);
+	onic_clear_hardware(priv);
+	onic_clear_capacity(priv);
+
+	free_netdev(priv->netdev);
+
+	pci_set_drvdata(pdev, NULL);
+	pci_release_mem_regions(pdev);
+	pci_disable_device(pdev);
+}
+
+/* static const struct pci_error_handlers qdma_err_handler = { */
+/*     .error_detected		    = qdma_error_detected, */
+/*     .slot_reset		    = qdma_slot_reset, */
+/*     .resume			    = qdma_error_resume, */
+/* #if KERNEL_VERSION(4, 13, 0) <= LINUX_VERSION_CODE */
+/*     .reset_prepare		    = qdma_reset_prepare, */
+/*     .reset_done		    = qdma_reset_done, */
+/* #elif KERNEL_VERSION(3, 16, 0) <= LINUX_VERSION_CODE */
+/*     .reset_notify		    = qdma_reset_notify, */
+/* #endif */
+/* }; */
+
+static struct pci_driver pci_driver = {
+	.name = onic_drv_name,
+	.id_table = onic_pci_tbl,
+	.probe = onic_probe,
+	.remove = onic_remove,
+};
+
+static int __init onic_init_module(void)
+{
+	pr_info("%s %s", onic_drv_str, onic_drv_ver);
+	return pci_register_driver(&pci_driver);
+}
+
+static void __exit onic_exit_module(void)
+{
+	pci_unregister_driver(&pci_driver);
+}
+
+module_init(onic_init_module);
+module_exit(onic_exit_module);
