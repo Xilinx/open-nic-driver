@@ -305,8 +305,13 @@ int onic_init_hardware(struct onic_private *priv)
 		val = onic_read_reg(hw, CMAC_OFFSET_CORE_VERSION(i));
 		if (val != ONIC_CMAC_CORE_VERSION)
 			break;
-		if (master_pf)
-			onic_enable_cmac(hw, i);
+		if (master_pf) {
+			rv = onic_enable_cmac(hw, i);
+			if (rv < 0) {
+				dev_err(&pdev->dev, "Failed to enable CMAC");
+				goto clear_hardware;
+			}
+		}
 	}
 	hw->num_cmacs = i;
 	dev_info(&pdev->dev, "Number of CMAC instances = %d", hw->num_cmacs);

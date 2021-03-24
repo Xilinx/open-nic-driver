@@ -187,9 +187,10 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	strlcpy(netdev->name, dev_name, sizeof(netdev->name));
 
 	memcpy(mac_addr, onic_default_dev_addr, 6);
-	mac_addr[3] = pdev->bus->number;
-	mac_addr[4] = PCI_SLOT(pdev->devfn);
-	mac_addr[5] = PCI_FUNC(pdev->devfn);
+	get_random_bytes(mac_addr + 3, 3);
+	/* mac_addr[3] = pdev->bus->number; */
+	/* mac_addr[4] = PCI_SLOT(pdev->devfn); */
+	/* mac_addr[5] = PCI_FUNC(pdev->devfn); */
 	onic_set_mac_address(netdev, (void *)mac_addr);
 
 	priv = netdev_priv(netdev);
