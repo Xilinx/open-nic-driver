@@ -38,7 +38,7 @@
 #define DEFAULT_THROT_EN_REQ			0
 #define DEFAULT_H2C_THROT_REQ_THRES		0x60
 
-#define RX_ALIGN_TIMEOUT_MS			10
+#define RX_ALIGN_TIMEOUT_MS			100
 #define CMAC_RESET_WAIT_MS			1
 
 static const u16 rngcnt_pool[QDMA_NUM_DESC_RNGCNT] = {
@@ -197,8 +197,8 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 		return -EINVAL;
 
 	/* Enable RS-FEC for CMACs with RS-FEC implemented */
-	/* onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3); */
-	/* onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7); */
+	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
+	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
 
 	if (cmac_id == 0) {
 		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x2);
@@ -305,13 +305,8 @@ int onic_init_hardware(struct onic_private *priv)
 		val = onic_read_reg(hw, CMAC_OFFSET_CORE_VERSION(i));
 		if (val != ONIC_CMAC_CORE_VERSION)
 			break;
-		if (master_pf) {
-			rv = onic_enable_cmac(hw, i);
-			if (rv < 0) {
-				dev_err(&pdev->dev, "Failed to enable CMAC");
-				goto clear_hardware;
-			}
-		}
+		if (master_pf)
+			onic_enable_cmac(hw, i);
 	}
 	hw->num_cmacs = i;
 	dev_info(&pdev->dev, "Number of CMAC instances = %d", hw->num_cmacs);
