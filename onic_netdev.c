@@ -51,9 +51,8 @@ static void onic_ring_increment_tail(struct onic_ring *ring)
 	ring->next_to_clean = (ring->next_to_clean + 1) % real_count;
 }
 
-static void onic_tx_clean(unsigned long data)
+static void onic_tx_clean(struct onic_tx_queue *q)
 {
-	struct onic_tx_queue *q = (struct onic_tx_queue *)data;
 	struct onic_private *priv = netdev_priv(q->netdev);
 	struct onic_ring *ring = &q->ring;
 	struct qdma_wb_stat wb;
@@ -121,7 +120,10 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	struct qdma_c2h_cmpl cmpl;
 	u8 *cmpl_ptr;
 	int work = 0;
-	int rv;
+	int i, rv;
+
+	for (i = 0; i < priv->num_tx_queues; i++)
+		onic_tx_clean(priv->tx_queue[i]);
 
 	cmpl_ptr = cmpl_ring->desc +
 		QDMA_C2H_CMPL_SIZE * cmpl_ring->next_to_clean;
@@ -207,8 +209,6 @@ static void onic_clear_tx_queue(struct onic_private *priv, u16 qid)
 
 	onic_qdma_clear_tx_queue(priv->hw.qdma, qid);
 
-	tasklet_kill(&q->tasklet);
-
 	ring = &q->ring;
 	real_count = ring->count - 1;
 	size = QDMA_H2C_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
@@ -275,9 +275,6 @@ static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
 		rv = -ENOMEM;
 		goto clear_tx_queue;
 	}
-
-	/* initialize TX queue tasklet */
-	tasklet_init(&q->tasklet, onic_tx_clean, (unsigned long)q);
 
 	/* initialize QDMA H2C queue */
 	param.rngcnt_idx = rngcnt_idx;
@@ -563,6 +560,8 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 	q = priv->tx_queue[qid];
 	ring = &q->ring;
+
+	onic_tx_clean(q);
 
 	if (onic_ring_full(ring)) {
 		netdev_info(dev, "ring is full");

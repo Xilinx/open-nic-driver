@@ -392,8 +392,8 @@ int onic_qdma_init_tx_queue(unsigned long qdma, u16 qid,
 	sw_ctxt.qen = 1;
 	sw_ctxt.wbk_en = 1;
 	sw_ctxt.is_mm = 0;
-	sw_ctxt.irq_arm = 1;
-	sw_ctxt.irq_en = 1;
+	sw_ctxt.irq_arm = 0;
+	sw_ctxt.irq_en = 0;
 	sw_ctxt.desc_sz = 1; /* 1: 16B for H2C stream */
 	sw_ctxt.fcrd_en = 0;
 	sw_ctxt.wbi_chk = 1;
@@ -566,7 +566,7 @@ static void onic_qdma_set_q_pidx(unsigned long qdma, u16 qid,
 
 void onic_set_tx_head(unsigned long qdma, u16 qid, u16 head)
 {
-	onic_qdma_set_q_pidx(qdma, qid, QDMA_H2C, head, 1);
+	onic_qdma_set_q_pidx(qdma, qid, QDMA_H2C, head, 0);
 }
 
 void onic_set_rx_head(unsigned long qdma, u16 qid, u16 head)

@@ -30,22 +30,9 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	struct onic_q_vector *vec = dev_id;
 	struct onic_private *priv = vec->priv;
 	u16 qid = vec->vid;
-	struct onic_tx_queue *txq = priv->tx_queue[qid];
 	struct onic_rx_queue *rxq = priv->rx_queue[qid];
-	struct onic_ring *cmpl_ring = &rxq->cmpl_ring;
-	struct qdma_c2h_cmpl cmpl;
-	u8 *cmpl_ptr;
 
-	cmpl_ptr = cmpl_ring->desc +
-		QDMA_C2H_CMPL_SIZE * cmpl_ring->next_to_clean;
-	qdma_unpack_c2h_cmpl(&cmpl, cmpl_ptr);
-	if (cmpl.color == cmpl_ring->color) {
-		/* onic_set_completion_tail(priv->hw.qdma, qid, cmpl_ring->next_to_clean, 0); */
-		napi_schedule(&rxq->napi);
-	} else {
-		tasklet_schedule(&txq->tasklet);
-	}
-
+	napi_schedule(&rxq->napi);
 	return IRQ_HANDLED;
 }
 

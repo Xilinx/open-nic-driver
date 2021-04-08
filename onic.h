@@ -65,8 +65,6 @@ struct onic_tx_queue {
 	struct onic_tx_buffer *buffer;
 	struct onic_ring ring;
 	struct onic_q_vector *vector;
-
-	struct tasklet_struct tasklet;
 };
 
 struct onic_rx_queue {
