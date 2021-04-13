@@ -610,7 +610,10 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 int onic_set_mac_address(struct net_device *dev, void *addr)
 {
-	u8 *dev_addr = (u8 *)addr;
+	struct sockaddr *saddr = addr;
+	u8 *dev_addr = saddr->sa_data;
+	if (!is_valid_ether_addr(saddr->sa_data))
+		return -EADDRNOTAVAIL;
 
 	netdev_info(dev, "Set MAC address to %x:%x:%x:%x:%x:%x",
 		    dev_addr[0], dev_addr[1], dev_addr[2],
