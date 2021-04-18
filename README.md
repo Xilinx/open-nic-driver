@@ -1,8 +1,12 @@
 # OpenNIC Driver
 
 OpenNIC driver implements a Linux kernel driver for OpenNIC shell.  It supports
-multiple PFs and up to two 100Gbps ports on the same card.  The driver has been
-tested on under Ubuntu 18.04 with Linux kernel version 4.15.0 and 5.3.0.
+multiple PCI-e PFs with multiple TX/RX queues in each PF, and up to two 100Gbps
+ports on the same card.  As of version 1.0, the driver has not implemented the
+ethtool routines to change the hash key and the indirection table.
+
+The driver has been tested on under Ubuntu 18.04 with Linux kernel version
+4.15.0 and 5.3.0.
 
 ## Building the Driver
 
