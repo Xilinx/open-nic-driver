@@ -134,8 +134,8 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct net_device *netdev;
 	struct onic_private *priv;
+	struct sockaddr saddr;
 	char dev_name[IFNAMSIZ];
-	char mac_addr[6];
 	int rv;
 	/* int pci_using_dac; */
 
@@ -186,12 +186,10 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		 PCI_FUNC(pdev->devfn));
 	strlcpy(netdev->name, dev_name, sizeof(netdev->name));
 
-	memcpy(mac_addr, onic_default_dev_addr, 6);
-	get_random_bytes(mac_addr + 3, 3);
-	/* mac_addr[3] = pdev->bus->number; */
-	/* mac_addr[4] = PCI_SLOT(pdev->devfn); */
-	/* mac_addr[5] = PCI_FUNC(pdev->devfn); */
-	onic_set_mac_address(netdev, (void *)mac_addr);
+	memset(&saddr, 0, sizeof(struct sockaddr));
+	memcpy(saddr.sa_data, onic_default_dev_addr, 6);
+	get_random_bytes(saddr.sa_data + 3, 3);
+	onic_set_mac_address(netdev, (void *)&saddr);
 
 	priv = netdev_priv(netdev);
 	memset(priv, 0, sizeof(struct onic_private));
