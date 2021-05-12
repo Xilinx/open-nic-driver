@@ -62,6 +62,8 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 
 ## Known Issues
 
+### Static IP Address
+
 It has been found that in some cases, DHCP clients may cause kernel panic after
 inserting the kernel module.  A message similar as below show up in `dmesg`.
 
@@ -74,6 +76,13 @@ name, IP address.
     auto IF_NAME
     iface IF_NAME inet static
           address IP_ADDRESS
+
+### IOMMU
+
+IOMMU is required to make the driver work.  To enable IOMMU, first check the
+BIOS settings to make sure that it is enabled.  Then add `intel_iommu=on` for
+Intel CPUs or `iommu=pt iommu=1` for AMD CPUs to the boot parameters and reboot
+the server.
 
 ---
 
