@@ -90,7 +90,7 @@ An alternative is to uninstall DHCP.  This can be done by killing any running pr
 
 ### Machine locks up when installing kernel module
 
-This seems to be related to DHCP issue mentioned above in "Static IP Address".  The recommendation
+This seems to be related to the DHCP issue mentioned above in "Static IP Address".  The recommendation
 is to remove DHCP.
 
 
