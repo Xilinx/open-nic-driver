@@ -62,6 +62,13 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 
 ## Known Issues
 
+### IOMMU
+
+IOMMU is required to make the driver work.  To enable IOMMU, first check the
+BIOS settings to make sure that it is enabled.  Then add either: (a) `intel_iommu=on iommu=pt` for
+Intel CPUs or (b) `amd_iommu=on iommu=pt` for AMD CPUs to the boot parameters.  Run `update-grub`
+and reboot the server.
+
 ### Static IP Address
 
 It has been found that in some cases, DHCP clients may cause kernel panic after
@@ -77,12 +84,16 @@ name, IP address.
     iface IF_NAME inet static
           address IP_ADDRESS
 
-### IOMMU
+An alternative is to uninstall DHCP.  This can be done by killing any running processes using DHCP with
+`ps -eF | grep dhclient`, and then to uninstall it with `sudo apt-get remove isc-dhcp-client`.
 
-IOMMU is required to make the driver work.  To enable IOMMU, first check the
-BIOS settings to make sure that it is enabled.  Then add `intel_iommu=on` for
-Intel CPUs or `iommu=pt iommu=1` for AMD CPUs to the boot parameters and reboot
-the server.
+
+### Machine locks up when installing kernel module
+
+This seems to be related to DHCP issue mentioned above in "Static IP Address".  The recommendation
+is to remove DHCP.
+
+
 
 ---
 
