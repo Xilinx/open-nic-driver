@@ -85,13 +85,13 @@ name, IP address.
           address IP_ADDRESS
 
 An alternative is to uninstall DHCP.  This can be done by killing any running processes using DHCP with
-`ps -eF | grep dhclient`, and then to uninstall it with `sudo apt-get remove isc-dhcp-client`.
+`ps -eF | grep dhclient`, and then to disable DHCP.
 
 
 ### Machine locks up when installing kernel module
 
 This seems to be related to the DHCP issue mentioned above in "Static IP Address".  The recommendation
-is to remove DHCP.
+is to disable DHCP.
 
 
 
