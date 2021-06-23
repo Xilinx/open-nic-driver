@@ -65,9 +65,9 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 ### IOMMU
 
 IOMMU is required to make the driver work.  To enable IOMMU, first check the
-BIOS settings to make sure that it is enabled.  Then add either: (a) `intel_iommu=on iommu=pt` for
-Intel CPUs or (b) `amd_iommu=on iommu=pt` for AMD CPUs to the boot parameters.  Run `update-grub`
-and reboot the server.
+BIOS settings to make sure that it is enabled.  If the CPU is an Intel processor, add 
+`intel_iommu=on` to the boot parameters.  No changes are necessary for AMD processors.  
+Run `update-grub` and reboot the server.
 
 ### Static IP Address
 
