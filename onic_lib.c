@@ -32,7 +32,7 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	u16 qid = vec->vid;
 	struct onic_rx_queue *rxq = priv->rx_queue[qid];
 
-	napi_schedule(&rxq->napi);
+	napi_schedule_irqoff(&rxq->napi);
 	return IRQ_HANDLED;
 }
 

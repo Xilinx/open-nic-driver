@@ -564,7 +564,6 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	onic_tx_clean(q);
 
 	if (onic_ring_full(ring)) {
-		netdev_info(dev, "ring is full");
 		return NETDEV_TX_BUSY;
 	}
 
