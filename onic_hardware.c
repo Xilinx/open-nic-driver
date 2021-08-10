@@ -155,6 +155,7 @@ static void onic_qdma_init_csr(struct qdma_dev *qdev)
 	       FIELD_SET(QDMA_C2H_TICK_VAL_MASK,
 			 DEFAULT_CMPL_COAL_TIMER_TICK) |
 	       FIELD_SET(QDMA_C2H_MAX_BUF_SZ_MASK, val));
+	//qdma_write_reg(qdev, offset, val - 2);
 	qdma_write_reg(qdev, offset, val);
 
 	/* set QDMA_H2C_REQ_THROT (0xE24) register.
@@ -197,8 +198,8 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 		return -EINVAL;
 
 	/* Enable RS-FEC for CMACs with RS-FEC implemented */
-	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
-	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
+	//onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
+	//onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
 
 	if (cmac_id == 0) {
 		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x2);
@@ -479,8 +480,10 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 		goto clear_rx_queue;
 
 	memset(&cmpl_ctxt, 0, sizeof(struct qdma_cmpl_ctxt));
-	cmpl_ctxt.stat_en = 0;
+	cmpl_ctxt.stat_en = 1;
+	//cmpl_ctxt.stat_en = 0;
 	cmpl_ctxt.intr_en = 1;
+	//cmpl_ctxt.intr_en = 0;
 	cmpl_ctxt.trig_mode = 0x5;
 	cmpl_ctxt.func_id = qdev->func_id;
 	cmpl_ctxt.counter_idx = 0;
@@ -492,6 +495,7 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	cmpl_ctxt.valid = 1;
 	cmpl_ctxt.full_upd = 0;
 	cmpl_ctxt.ovf_chk_dis = 0;
+	//cmpl_ctxt.ovf_chk_dis = 1;
 	cmpl_ctxt.vec = param->vid;
 	cmpl_ctxt.intr_aggr = 0;
 
@@ -550,6 +554,8 @@ static void onic_qdma_set_q_pidx(unsigned long qdma, u16 qid,
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
 	u32 offset, val;
+	bool debug = 0;
+	if (debug) dev_info(&qdev->pdev->dev, "onic_qdma_set_q_pidx(qid:%u, dir:%x, pidx:%u, irq_qrm:%u)", qid, dir, pidx, irq_arm);
 
 	if (qid < 0)
 		return;
@@ -591,6 +597,8 @@ static void onic_qdma_set_cmpl_cidx(unsigned long qdma, u16 qid, u16 cidx,
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
 	u32 offset, val;
+	bool debug = 0;
+	if (debug) dev_info(&qdev->pdev->dev, "onic_qdma_set_cmpl_cidx(qid:%u, cidx:%u, idx:%u, timser_idx:%u, trig_mode:%u irq_arm:%u)", qid, cidx, counter_idx, timer_idx, trig_mode, irq_arm);
 
 	if (qid < 0)
 		return;
@@ -608,5 +616,10 @@ static void onic_qdma_set_cmpl_cidx(unsigned long qdma, u16 qid, u16 cidx,
 
 void onic_set_completion_tail(unsigned long qdma, u16 qid, u16 tail, u8 irq_arm)
 {
-	onic_qdma_set_cmpl_cidx(qdma, qid, tail, 0, 0, 5, 0, irq_arm);
+	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
+	u8 trig_mode = 5; // trigger from: user, count, or timer
+	u8 stat_en = 1;  // enabled is necessary for getting proper completion_status, e.g. for knowing pidx
+	bool debug = 0;
+	if (debug) dev_info(&qdev->pdev->dev, "onic_set_completion_tail (qid:%u, tail:%u, irq_arm:%u)", qid, tail, irq_arm);
+	onic_qdma_set_cmpl_cidx(qdma, qid, tail, 0, 0, trig_mode, stat_en, irq_arm);
 }

@@ -18,6 +18,7 @@
 #define __ONIC_H__
 
 #include <linux/netdevice.h>
+#include <linux/cpumask.h>
 
 #include "onic_hardware.h"
 

@@ -31,13 +31,18 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	struct onic_private *priv = vec->priv;
 	u16 qid = vec->vid;
 	struct onic_rx_queue *rxq = priv->rx_queue[qid];
+	bool debug = 0;
+	if (debug) dev_info(&priv->pdev->dev, "queue irq");
 
+	//napi_schedule(&rxq->napi);
 	napi_schedule_irqoff(&rxq->napi);
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
+	struct onic_private *priv = dev_id;
+	dev_info(&priv->pdev->dev, "user irq");
 	return IRQ_WAKE_THREAD;
 }
 
@@ -52,21 +57,21 @@ static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t onic_error_handler(int irq, void *dev_id)
-{
-	return IRQ_WAKE_THREAD;
-}
+//static irqreturn_t onic_error_handler(int irq, void *dev_id)
+//{
+//	return IRQ_WAKE_THREAD;
+//}
 
-static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
-{
-	struct onic_private *priv = dev_id;
-
-	dev_err(&priv->pdev->dev,
-		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
-		PCI_FUNC(priv->pdev->devfn), irq);
-
-	return IRQ_HANDLED;
-}
+//static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
+//{
+//	struct onic_private *priv = dev_id;
+//
+//	dev_err(&priv->pdev->dev,
+//		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
+//		PCI_FUNC(priv->pdev->devfn), irq);
+//
+//	return IRQ_HANDLED;
+//}
 
 /**
  * onic_init_q_vector - clear a queue vector
@@ -216,22 +221,24 @@ int onic_init_interrupt(struct onic_private *priv)
 	if (rv < 0) {
 		dev_err(&pdev->dev, "Failed to setup user interrupt");
 		goto clear_interrupt;
-	}
+	} else
+		dev_info(&pdev->dev, "Setup onic-user IRQ");
 	set_bit(ONIC_USER_INTR, priv->state);
 
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return 0;
 
-	vid++;
-	rv = request_threaded_irq(pci_irq_vector(pdev, vid),
-				  onic_error_handler, onic_error_thread_fn,
-				  0, "onic-error", priv);
-	if (rv < 0) {
-		dev_err(&pdev->dev, "Failed to setup error interrupt");
-		goto clear_interrupt;
-	}
-	onic_qdma_init_error_interrupt(priv->hw.qdma, vid);
-	set_bit(ONIC_ERROR_INTR, priv->state);
+	//vid++;
+	//rv = request_threaded_irq(pci_irq_vector(pdev, vid),
+	//			  onic_error_handler, onic_error_thread_fn,
+	//			  0, "onic-error", priv);
+	//if (rv < 0) {
+	//	dev_err(&pdev->dev, "Failed to setup error interrupt");
+	//	goto clear_interrupt;
+	//} else
+	//	dev_info(&pdev->dev, "Setup onic-error IRQ");
+	//onic_qdma_init_error_interrupt(priv->hw.qdma, vid);
+	//set_bit(ONIC_ERROR_INTR, priv->state);
 
 	return 0;
 
