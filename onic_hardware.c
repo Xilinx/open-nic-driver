@@ -19,9 +19,9 @@
 #include "onic_hardware.h"
 #include "onic_register.h"
 #include "onic.h"
-#include "qdma_access/qdma_register.h"
-#include "qdma_access/qdma_context.h"
-#include "qdma_access/qdma_error_info.h"
+#include "qdma_register.h"
+#include "qdma_context.h"
+#include "qdma_error_info.h"
 
 /* default CSR values for QDMA */
 #define DEFAULT_MAX_DESC_FETCH			6

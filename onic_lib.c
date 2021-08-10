@@ -34,6 +34,7 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	bool debug = 0;
 	if (debug) dev_info(&priv->pdev->dev, "queue irq");
 
+	//napi_schedule(&rxq->napi);
 	napi_schedule_irqoff(&rxq->napi);
 	return IRQ_HANDLED;
 }
