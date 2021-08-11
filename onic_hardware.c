@@ -155,7 +155,6 @@ static void onic_qdma_init_csr(struct qdma_dev *qdev)
 	       FIELD_SET(QDMA_C2H_TICK_VAL_MASK,
 			 DEFAULT_CMPL_COAL_TIMER_TICK) |
 	       FIELD_SET(QDMA_C2H_MAX_BUF_SZ_MASK, val));
-	//qdma_write_reg(qdev, offset, val - 2);
 	qdma_write_reg(qdev, offset, val);
 
 	/* set QDMA_H2C_REQ_THROT (0xE24) register.
@@ -198,8 +197,8 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 		return -EINVAL;
 
 	/* Enable RS-FEC for CMACs with RS-FEC implemented */
-	//onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
-	//onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
+	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
+	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
 
 	if (cmac_id == 0) {
 		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x2);
@@ -483,7 +482,6 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	cmpl_ctxt.stat_en = 1;
 	//cmpl_ctxt.stat_en = 0;
 	cmpl_ctxt.intr_en = 1;
-	//cmpl_ctxt.intr_en = 0;
 	cmpl_ctxt.trig_mode = 0x5;
 	cmpl_ctxt.func_id = qdev->func_id;
 	cmpl_ctxt.counter_idx = 0;
@@ -495,7 +493,6 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	cmpl_ctxt.valid = 1;
 	cmpl_ctxt.full_upd = 0;
 	cmpl_ctxt.ovf_chk_dis = 0;
-	//cmpl_ctxt.ovf_chk_dis = 1;
 	cmpl_ctxt.vec = param->vid;
 	cmpl_ctxt.intr_aggr = 0;
 

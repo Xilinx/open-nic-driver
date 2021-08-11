@@ -214,7 +214,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
         }
         cmpl_ptr = cmpl_ring->desc + (QDMA_C2H_CMPL_SIZE * cmpl_ring->next_to_clean);
 
-        if ((work) >= budget) {
+        if ((++work) >= budget) {
             if (debug) netdev_info(q->netdev, "watchdog work %u, budget %u", work, budget);
             goto out_of_budget;
         }
