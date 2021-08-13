@@ -41,15 +41,16 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
-	struct onic_private *priv = dev_id;
+	struct onic_q_vector *vec = dev_id;
+        struct onic_private *priv = vec->priv;
 	dev_info(&priv->pdev->dev, "user irq");
 	return IRQ_WAKE_THREAD;
 }
 
 static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 {
-	struct onic_private *priv = dev_id;
-
+	struct onic_q_vector *vec = dev_id;
+        struct onic_private *priv = vec->priv;
 	dev_info(&priv->pdev->dev,
 		"User IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
@@ -64,8 +65,8 @@ static irqreturn_t onic_error_handler(int irq, void *dev_id)
 
 static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 {
-	struct onic_private *priv = dev_id;
-
+	struct onic_q_vector *vec = dev_id;
+        struct onic_private *priv = vec->priv;
 	dev_err(&priv->pdev->dev,
 		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
@@ -101,7 +102,7 @@ static int onic_init_q_vector(struct onic_private *priv, u16 vid)
 {
 	struct pci_dev *pdev = priv->pdev;
 	struct onic_q_vector *vec;
-	char name[ONIC_MAX_IRQ_NAME];
+	char* name = (char*)vmalloc(sizeof(char)*ONIC_MAX_IRQ_NAME);
 	int rv;
 
 	vec = kzalloc(sizeof(struct onic_q_vector), GFP_KERNEL);

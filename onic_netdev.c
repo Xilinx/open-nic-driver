@@ -216,6 +216,8 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 
         if ((++work) >= budget) {
             if (debug) netdev_info(q->netdev, "watchdog work %u, budget %u", work, budget);
+	    napi_complete(napi);
+            napi_reschedule(napi);
             goto out_of_budget;
         }
 
