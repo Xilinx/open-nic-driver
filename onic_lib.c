@@ -101,7 +101,7 @@ static int onic_init_q_vector(struct onic_private *priv, u16 vid)
 {
 	struct pci_dev *pdev = priv->pdev;
 	struct onic_q_vector *vec;
-	char name[ONIC_MAX_IRQ_NAME];
+	char* name = (char*)vmalloc(sizeof(char)*ONIC_MAX_IRQ_NAME);
 	int rv;
 
 	vec = kzalloc(sizeof(struct onic_q_vector), GFP_KERNEL);
