@@ -41,6 +41,8 @@
 #define RX_ALIGN_TIMEOUT_MS			100
 #define CMAC_RESET_WAIT_MS			1
 
+static bool debug = 0;
+
 static const u16 rngcnt_pool[QDMA_NUM_DESC_RNGCNT] = {
 	4096, 64, 128, 192, 256, 384, 512, 768,
 	1024, 1536, 3072, 4096, 6144, 8192, 12288, 16384
@@ -341,6 +343,7 @@ void onic_qdma_init_error_interrupt(unsigned long qdma, u16 vid)
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
 	u32 offset, val;
 	int i;
+	if (debug) dev_info(&qdev->pdev->dev, "entering onic_qdma_init_error_interrupt\n");
 
 	offset = QDMA_OFFSET_GLBL_ERR_INT;
 	val = (FIELD_SET(QDMA_GLBL_ERR_FUNC_MASK, qdev->func_id) |
@@ -366,13 +369,17 @@ void onic_qdma_init_error_interrupt(unsigned long qdma, u16 vid)
 	       FIELD_SET(QDMA_GLBL_ERR_VEC_MASK, vid) |
 	       FIELD_SET(QDMA_GLBL_ERR_ARM_MASK, 1));
 	qdma_write_reg(qdev, offset, val);
+	if (debug) dev_info(&qdev->pdev->dev, "completing onic_qdma_init_error_interrupt\n");
+
 }
 
 void onic_qdma_clear_error_interrupt(unsigned long qdma)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
+	if (debug) dev_info(&qdev->pdev->dev, "starting onic_qdma_clear_error_interrupt\n");
 
 	qdma_write_reg(qdev, QDMA_OFFSET_GLBL_ERR_INT, 0);
+	if (debug) dev_info(&qdev->pdev->dev, "completing onic_qdma_clear_error_interrupt\n");
 }
 
 int onic_qdma_init_tx_queue(unsigned long qdma, u16 qid,
@@ -616,7 +623,7 @@ void onic_set_completion_tail(unsigned long qdma, u16 qid, u16 tail, u8 irq_arm)
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
 	u8 trig_mode = 5; // trigger from: user, count, or timer
 	u8 stat_en = 1;  // enabled is necessary for getting proper completion_status, e.g. for knowing pidx
-	bool debug = 0;
+	//bool debug = 0;
 	if (debug) dev_info(&qdev->pdev->dev, "onic_set_completion_tail (qid:%u, tail:%u, irq_arm:%u)", qid, tail, irq_arm);
 	onic_qdma_set_cmpl_cidx(qdma, qid, tail, 0, 0, trig_mode, stat_en, irq_arm);
 }

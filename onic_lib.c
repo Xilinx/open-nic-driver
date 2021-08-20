@@ -20,6 +20,7 @@
 #include "onic.h"
 
 #define ONIC_MAX_IRQ_NAME 32
+static bool debug = 0;
 
 extern int onic_poll(struct napi_struct *napi, int budget);
 
@@ -31,48 +32,69 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	struct onic_private *priv = vec->priv;
 	u16 qid = vec->vid;
 	struct onic_rx_queue *rxq = priv->rx_queue[qid];
-	bool debug = 0;
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_q_handler \n");
+
 	if (debug) dev_info(&priv->pdev->dev, "queue irq");
 
 	//napi_schedule(&rxq->napi);
 	napi_schedule_irqoff(&rxq->napi);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_q_handler\n");
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+    struct onic_private *priv = dev_id;
+    //struct onic_q_vector *vec = dev_id;
+	//struct onic_private *priv = vec->priv;
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_user_handler\n");
 	dev_info(&priv->pdev->dev, "user irq");
-	return IRQ_WAKE_THREAD;
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_user_handler\n");
+	//return IRQ_WAKE_THREAD;
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+    struct onic_private *priv = dev_id;
+	//struct onic_q_vector *vec = dev_id;
+	//struct onic_private *priv = vec->priv;
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_user_thread_fn\n");
+
 	dev_info(&priv->pdev->dev,
 		"User IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
 
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_user_thread_fn\n");
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t onic_error_handler(int irq, void *dev_id)
 {
-	return IRQ_WAKE_THREAD;
+    struct onic_private *priv = dev_id;
+    //struct onic_q_vector *vec = dev_id;
+    //struct onic_private *priv = vec->priv;
+    if (debug) dev_info(&priv->pdev->dev, "starting onic_error_handler\n");
+    if (debug) dev_info(&priv->pdev->dev, "completing onic_error_handler\n");
+    return IRQ_HANDLED;
+	//return IRQ_WAKE_THREAD;
 }
 
 static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+    struct onic_private *priv = dev_id;
+	//struct onic_q_vector *vec = dev_id;
+	//struct onic_private *priv = vec->priv;
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_error_thread_fn\n");
+
 	dev_err(&priv->pdev->dev,
 		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
 
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_error_thread_fn\n");
 	return IRQ_HANDLED;
 }
+
 
 /**
  * onic_init_q_vector - clear a queue vector
@@ -82,11 +104,13 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 static void onic_clear_q_vector(struct onic_private *priv, u16 vid)
 {
 	struct onic_q_vector *vec = priv->q_vector[vid];
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_clear_q_vector\n");
 
 	if (!vec)
 		return;
 	free_irq(pci_irq_vector(priv->pdev, vid), vec);
 	kfree(vec);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_clear_q_vector\n");
 }
 
 /**
@@ -102,8 +126,12 @@ static int onic_init_q_vector(struct onic_private *priv, u16 vid)
 {
 	struct pci_dev *pdev = priv->pdev;
 	struct onic_q_vector *vec;
+	// JMY
+	//char name[ONIC_MAX_IRQ_NAME];
 	char* name = (char*)vmalloc(sizeof(char)*ONIC_MAX_IRQ_NAME);
 	int rv;
+
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_init_q_vector\n");
 
 	vec = kzalloc(sizeof(struct onic_q_vector), GFP_KERNEL);
 	if (!vec)
@@ -127,6 +155,7 @@ static int onic_init_q_vector(struct onic_private *priv, u16 vid)
 	dev_info(&pdev->dev, "Setup IRQ vector %d with name %s",
 		 pci_irq_vector(pdev, vid), name);
 	priv->q_vector[vid] = vec;
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_init_q_vector\n");
 
 	return 0;
 }
@@ -145,6 +174,8 @@ static int onic_init_q_vector(struct onic_private *priv, u16 vid)
 static int onic_acquire_msix_vectors(struct onic_private *priv)
 {
 	int vectors, non_q_vectors;
+
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_acquire_msix_vectors\n");
 
 	vectors = ONIC_MAX_QUEUES;
 	non_q_vectors = 1;
@@ -166,6 +197,7 @@ static int onic_acquire_msix_vectors(struct onic_private *priv)
 
 	dev_info(&priv->pdev->dev, "Allocated %d queue vectors\n",
 		 priv->num_q_vectors);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_acquire_msix_vectors\n");
 	return 0;
 }
 
@@ -180,35 +212,45 @@ static void onic_set_num_queues(struct onic_private *priv)
 {
 	struct net_device *dev = priv->netdev;
 
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_set_num_queues\n");
+
 	priv->num_tx_queues =
 		min_t(u16, priv->num_q_vectors, dev->real_num_tx_queues);
 	priv->num_rx_queues =
 		min_t(u16, priv->num_q_vectors, dev->real_num_rx_queues);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_set_num_queues\n");
 }
 
 int onic_init_capacity(struct onic_private *priv)
 {
 	int rv;
 
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_init_capacity\n");
+
 	rv = onic_acquire_msix_vectors(priv);
 	if (rv < 0)
 		return rv;
 	onic_set_num_queues(priv);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_init_capacity\n");
 	return 0;
 }
 
 void onic_clear_capacity(struct onic_private *priv)
 {
+    if (debug) dev_info(&priv->pdev->dev, "starting onic_clear_capacity\n");
 	priv->num_tx_queues = 0;
 	priv->num_rx_queues = 0;
 	priv->num_q_vectors = 0;
 	pci_free_irq_vectors(priv->pdev);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_clear_capacity\n");
 }
 
 int onic_init_interrupt(struct onic_private *priv)
 {
 	struct pci_dev *pdev = priv->pdev;
 	int vid, rv;
+
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_init_interrupt\n");
 
 	for (vid = 0; vid < priv->num_q_vectors; ++vid) {
 		rv = onic_init_q_vector(priv, vid);
@@ -220,7 +262,7 @@ int onic_init_interrupt(struct onic_private *priv)
 				  onic_user_handler, onic_user_thread_fn,
 				  0, "onic-user", priv);
 	if (rv < 0) {
-		dev_err(&pdev->dev, "Failed to setup user interrupt");
+		dev_err(&pdev->dev, "Failed to setup user interrupt\n");
 		goto clear_interrupt;
 	}
 	set_bit(ONIC_USER_INTR, priv->state);
@@ -228,20 +270,24 @@ int onic_init_interrupt(struct onic_private *priv)
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return 0;
 
+
 	vid++;
 	rv = request_threaded_irq(pci_irq_vector(pdev, vid),
 				  onic_error_handler, onic_error_thread_fn,
 				  0, "onic-error", priv);
 	if (rv < 0) {
-		dev_err(&pdev->dev, "Failed to setup error interrupt");
+		dev_err(&pdev->dev, "Failed to setup error interrupt\n");
 		goto clear_interrupt;
 	}
 	onic_qdma_init_error_interrupt(priv->hw.qdma, vid);
 	set_bit(ONIC_ERROR_INTR, priv->state);
+	
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_init_interrupt\n");
 
 	return 0;
 
 clear_interrupt:
+    if (debug) dev_info(&priv->pdev->dev, "within onic_init_interrupt: clearing interrupt\n");
 	onic_clear_interrupt(priv);
 	return rv;
 }
@@ -252,6 +298,8 @@ void onic_clear_interrupt(struct onic_private *priv)
 	int vid = (master_pf) ?
 		priv->num_q_vectors + 1 :
 		priv->num_q_vectors;
+	if (debug) dev_info(&priv->pdev->dev, "starting onic_clear_interrupt\n");
+
 
 	if (master_pf) {
 		if (test_bit(ONIC_ERROR_INTR, priv->state)) {
@@ -266,4 +314,5 @@ void onic_clear_interrupt(struct onic_private *priv)
 
 	while (vid--)
 		onic_clear_q_vector(priv, vid);
+	if (debug) dev_info(&priv->pdev->dev, "completing onic_clear_interrupt\n");
 }

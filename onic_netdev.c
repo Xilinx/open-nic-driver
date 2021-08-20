@@ -25,6 +25,8 @@
 
 #define ONIC_RX_DESC_STEP 256
 
+static bool debug = 0;
+
 inline static u16 onic_ring_get_real_count(struct onic_ring *ring)
 {
     /* Valid writeback entry means one less count of descriptor entries */
@@ -55,33 +57,46 @@ static void onic_tx_clean(struct onic_tx_queue *q)
     struct onic_ring *ring = &q->ring;
     struct qdma_wb_stat wb;
     int work, i;
+    if (debug) netdev_info (q->netdev, "entering onic_tx_clean\n");
 
-    if (test_and_set_bit(0, q->state))
+    if (test_and_set_bit(0, q->state)) {
+        if (debug) netdev_info (q->netdev, "completing onic_tx_clean, test_and_set_bit_0\n");
         return;
+    }
 
     qdma_unpack_wb_stat(&wb, ring->wb);
 
     if (wb.cidx == ring->next_to_clean) {
         clear_bit(0, q->state);
+        if (debug) netdev_info (q->netdev, "completing onic_tx_clean, wb.cidx == ring->next_to_clean\n");
+        // no work to do
         return;
     }
 
-    work = wb.cidx - ring->next_to_clean;
-    if (work < 0)
-        work += onic_ring_get_real_count(ring);
+    else if (wb.cidx > ring-> next_to_clean)
+        work = wb.cidx - ring->next_to_clean;
+    else
+        work = (onic_ring_get_real_count(ring) - ring-> next_to_clean) + wb.cidx ;
+
+    //if (work < 0)
+    //    work += onic_ring_get_real_count(ring);
 
     for (i = 0; i < work; ++i) {
         struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
         struct sk_buff *skb = buf->skb;
 
+        if (debug) netdev_info (q->netdev, "inside onic_tx_clean, about to call dma_unmap_single, work=%d, i=%d\n", work, i);
         dma_unmap_single(&priv->pdev->dev, buf->dma_addr,
                          buf->len, DMA_TO_DEVICE);
+        if (debug) netdev_info (q->netdev, "inside onic_tx_clean, about to call dev_kfree_skb, work=%d, i=%d\n", work, i);
         dev_kfree_skb(skb);
 
         onic_ring_increment_tail(ring);
     }
+    if (debug) netdev_info (q->netdev, "inside onic_tx_clean, checking ring->next_to_clean == wb.cidx %s \n", ring->next_to_clean==wb.cidx? "true":"false");
 
     clear_bit(0, q->state);
+    if (debug) netdev_info (q->netdev, "completing onic_tx_clean, reached end of function\n");
 }
 
 static bool onic_rx_high_watermark(struct onic_rx_queue *q)
@@ -100,11 +115,13 @@ static void onic_rx_refill(struct onic_rx_queue *q)
 {
     struct onic_private *priv = netdev_priv(q->netdev);
     struct onic_ring *ring = &q->desc_ring;
+    if (debug) netdev_info (q->netdev, "entering onic_rx_refill\n");
 
     ring->next_to_use += ONIC_RX_DESC_STEP;
     ring->next_to_use %= onic_ring_get_real_count(ring);
 
     onic_set_rx_head(priv->hw.qdma, q->qid, ring->next_to_use);
+    if (debug) netdev_info (q->netdev, "completing onic_rx_refill\n");
 }
 
 static int onic_rx_poll(struct napi_struct *napi, int budget)
@@ -123,7 +140,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
     int i, rv;
     bool napi_cmpl_rval = 0;
     bool flipped = 0;
-    bool debug = 0;
     u8 arm_irq = 0;
 
     for (i = 0; i < priv->num_tx_queues; i++)
@@ -217,7 +233,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
         if ((++work) >= budget) {
             if (debug) netdev_info(q->netdev, "watchdog work %u, budget %u", work, budget);
 	    napi_complete(napi);
-            napi_reschedule(napi);
+	    napi_reschedule(napi);
             goto out_of_budget;
         }
 
@@ -283,7 +299,8 @@ out_of_budget:
         u16 vid;
         u32 size, real_count;
         int rv;
-        bool debug=0;
+
+        if (debug) netdev_info (dev, "entering onic_init_tx_queue\n");
 
 
         if (priv->tx_queue[qid]) {
@@ -338,10 +355,12 @@ out_of_budget:
             goto clear_tx_queue;
 
         priv->tx_queue[qid] = q;
+        if (debug) netdev_info (dev, "completing onic_init_tx_queue\n");
         return 0;
 
         clear_tx_queue:
         onic_clear_tx_queue(priv, qid);
+        if (debug) netdev_info (dev, "completing onic_init_tx_queue\n");
         return rv;
     }
 
@@ -363,6 +382,7 @@ out_of_budget:
          * net device.
          */
         napi_disable(&q->napi);
+        if (debug) netdev_info (q->netdev, "entering onic_clear_rx_queue\n");
 
         ring = &q->desc_ring;
         real_count = ring->count - 1;
@@ -385,14 +405,15 @@ out_of_budget:
         kfree(q->buffer);
         kfree(q);
         priv->rx_queue[qid] = NULL;
+        if (debug) netdev_info (q->netdev, "completing onic_clear_rx_queue\n");
     }
 
     static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
     {
-        const u8 bufsz_idx = 13;
-        const u8 desc_rngcnt_idx = 13;
+        const u8 bufsz_idx = 1;
+        const u8 desc_rngcnt_idx = 1;
         //const u8 cmpl_rngcnt_idx = 15;
-        const u8 cmpl_rngcnt_idx = 13;
+        const u8 cmpl_rngcnt_idx = 1;
         struct net_device *dev = priv->netdev;
         struct onic_rx_queue *q;
         struct onic_ring *ring;
@@ -400,8 +421,8 @@ out_of_budget:
         u16 vid;
         u32 size, real_count;
         int i, rv;
-        bool debug=0;
 
+        if (debug) netdev_info (dev, "entering onic_init_rx_queue\n");
 
         if (priv->rx_queue[qid]) {
             if (debug) netdev_info(dev, "Re-initializing RX queue %d", qid);
@@ -466,7 +487,7 @@ out_of_budget:
             unsigned int offset = q->buffer[i].offset;
 
             desc.dst_addr = dma_map_page(&priv->pdev->dev, pg, 0,
-                                         PAGE_SIZE,
+                                         1,//PAGE_SIZE, // cneely test
                                          DMA_FROM_DEVICE);
             desc.dst_addr += offset;
 
@@ -516,10 +537,12 @@ out_of_budget:
         onic_set_completion_tail(priv->hw.qdma, qid, 0, 1);
 
         priv->rx_queue[qid] = q;
+        if (debug) netdev_info (dev, "completing onic_init_rx_queue\n");
         return 0;
 
         clear_rx_queue:
         onic_clear_rx_queue(priv, qid);
+        if (debug) netdev_info (dev, "completing onic_init_rx_queue\n");
         return rv;
     }
 
@@ -527,6 +550,8 @@ out_of_budget:
     {
         struct net_device *dev = priv->netdev;
         int qid, rv;
+
+        if (debug) netdev_info (dev, "entering onic_init_tx_resource\n");
 
         for (qid = 0; qid < priv->num_tx_queues; ++qid) {
             rv = onic_init_tx_queue(priv, qid);
@@ -537,11 +562,13 @@ out_of_budget:
             goto clear_tx_resource;
         }
 
+        if (debug) netdev_info (dev, "completing onic_init_tx_resource\n");
         return 0;
 
         clear_tx_resource:
         while (--qid)
             onic_clear_tx_queue(priv, qid);
+        if (debug) netdev_info (dev, "completing onic_init_tx_resource\n");
         return rv;
     }
 
@@ -549,6 +576,7 @@ out_of_budget:
     {
         struct net_device *dev = priv->netdev;
         int qid, rv;
+        if (debug) netdev_info (dev, "entering onic_init_rx_resource\n");
 
         for (qid = 0; qid < priv->num_rx_queues; ++qid) {
             rv = onic_init_rx_queue(priv, qid);
@@ -559,11 +587,13 @@ out_of_budget:
             goto clear_rx_resource;
         }
 
+        if (debug) netdev_info (dev, "completing onic_init_rx_resource\n");
         return 0;
 
         clear_rx_resource:
         while (--qid)
             onic_clear_rx_queue(priv, qid);
+        if (debug) netdev_info (dev, "completing onic_init_rx_resource\n");
         return rv;
     }
 
@@ -571,6 +601,7 @@ out_of_budget:
     {
         struct onic_private *priv = netdev_priv(dev);
         int rv;
+        if (debug) netdev_info (dev, "entering onic_open_netdev\n");
 
         rv = onic_init_tx_resource(priv);
         if (rv < 0)
@@ -582,10 +613,12 @@ out_of_budget:
 
         netif_tx_start_all_queues(dev);
         netif_carrier_on(dev);
+        if (debug) netdev_info (dev, "completing onic_open_netdev\n");
         return 0;
 
         stop_netdev:
         onic_stop_netdev(dev);
+        if (debug) netdev_info (dev, "completing onic_open_netdev\n");
         return rv;
     }
 
@@ -593,6 +626,7 @@ out_of_budget:
     {
         struct onic_private *priv = netdev_priv(dev);
         int qid;
+        if (debug) netdev_info (dev, "entering onic_stop_netdev\n");
 
         /* stop sending */
         netif_carrier_off(dev);
@@ -603,6 +637,7 @@ out_of_budget:
         for (qid = 0; qid < priv->num_rx_queues; ++qid)
             onic_clear_rx_queue(priv, qid);
 
+        if (debug) netdev_info (dev, "completing onic_stop_netdev\n");
         return 0;
     }
 
@@ -616,34 +651,45 @@ out_of_budget:
         dma_addr_t dma_addr;
         u8 *desc_ptr;
         int rv;
-        bool debug=0;
-        bool check_rv =0;
 
         q = priv->tx_queue[qid];
         ring = &q->ring;
+        if (debug) netdev_info (dev, "entering onic_xmit_frame\n");
 
         onic_tx_clean(q);
 
         if (onic_ring_full(ring)) {
-            if (debug) netdev_info(dev, "ring is full");
+            if (debug) netdev_info(dev, "ring is full, returning TX_BUSY\n");
             return NETDEV_TX_BUSY;
         }
 
         /* minimum Ethernet packet length is 60 */
+        if (debug) netdev_info (dev, "inside onic_xmit_frame, calling skb_put_padto\n");
         rv = skb_put_padto(skb, ETH_ZLEN);
 
-        if (rv<0) check_rv = 1;
+        if (rv<0) {
+            if (debug) netdev_info (dev, "completing onic_xmit_frame, skb_put_padto had error\n");
+            goto incr_head;
+        }
+	
+        if (debug) netdev_info (dev, "inside onic_xmit_frame, calling dma_map_single\n");
+
 
         dma_addr = dma_map_single(&priv->pdev->dev,
                                   skb->data,
-                                  skb->data_len,
+                                  skb->len,
+                                  //skb->data_len,
                                   DMA_TO_DEVICE);
+
+        if (debug) netdev_info (dev, "inside onic_xmit_frame, checking for dma_mapping_error\n");
         if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
             netdev_err(dev, "dma map error, skb = %p, dma_addr = %llx",
                        skb, dma_addr);
+            if (debug) netdev_info (q->netdev, "completing onic_xmit_frame, returning TX_BUSY\n");
             return NETDEV_TX_BUSY;
         }
 
+        if (debug) netdev_info (q->netdev, "within onic_xmit_frame, updating desc, q->buffer, stats \n");
         desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
         desc.len = skb->len;
         desc.src_addr = dma_addr;
@@ -657,17 +703,22 @@ out_of_budget:
         priv->netdev_stats.tx_packets++;
         priv->netdev_stats.tx_bytes += skb->len;
 
+incr_head:
         onic_ring_increment_head(ring);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
         if (onic_ring_full(ring) || !netdev_xmit_more()) {
+            if (debug) netdev_info (q->netdev, "within onic_xmit_frame, after linux_version_check and ring full and !netdev_ximit_more \n");
 #else
             if (onic_ring_full(ring) || !skb->xmit_more) {
+                if (debug) netdev_info (q->netdev, "within onic_xmit_frame, after linux_version_check and ring full and !skb_xmit_more\n");
+
 #endif
             wmb();
             onic_set_tx_head(priv->hw.qdma, qid, ring->next_to_use);
         }
 
+        if (debug) netdev_info (dev, "completing onic_xmit_frame\n");
         return NETDEV_TX_OK;
     }
 
@@ -677,11 +728,13 @@ out_of_budget:
         u8 *dev_addr = saddr->sa_data;
         if (!is_valid_ether_addr(saddr->sa_data))
             return -EADDRNOTAVAIL;
+        if (debug) netdev_info (dev, "entering onic_set_mac_address\n");
 
         netdev_info(dev, "Set MAC address to %x:%x:%x:%x:%x:%x",
                     dev_addr[0], dev_addr[1], dev_addr[2],
                     dev_addr[3], dev_addr[4], dev_addr[5]);
         memcpy(dev->dev_addr, dev_addr, dev->addr_len);
+        if (debug) netdev_info (dev, "completing onic_set_mac_address\n");
         return 0;
     }
 
@@ -696,7 +749,7 @@ out_of_budget:
         return 0;
     }
 
-    void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+    inline void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
     {
         struct onic_private *priv = netdev_priv(dev);
 

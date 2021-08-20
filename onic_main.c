@@ -36,11 +36,11 @@ char onic_drv_name[] = "open-nic";
 char onic_drv_name[] = "open-nic-vf";
 #endif
 
-#define DRV_VER "0.1"
+#define DRV_VER "0.2"
 const char onic_drv_str[] = DRV_STR;
 const char onic_drv_ver[] = DRV_VER;
 
-MODULE_AUTHOR("Xilinx Labs");
+MODULE_AUTHOR("Xilinx Research Labs");
 MODULE_DESCRIPTION(DRV_STR);
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRV_VER);
@@ -137,6 +137,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct sockaddr saddr;
 	char dev_name[IFNAMSIZ];
 	int rv;
+	bool debug = 0;
 	/* int pci_using_dac; */
 
 	rv = pci_enable_device_mem(pdev);
@@ -195,7 +196,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	memset(priv, 0, sizeof(struct onic_private));
 
 	if (PCI_FUNC(pdev->devfn) == 0) {
-		dev_info(&pdev->dev, "device is a master PF");
+	    dev_info(&pdev->dev, "device is a master PF");
 		set_bit(ONIC_FLAG_MASTER_PF, priv->flags);
 	}
 	priv->pdev = pdev;
@@ -203,19 +204,25 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	spin_lock_init(&priv->tx_lock);
 	spin_lock_init(&priv->rx_lock);
 
+	if (debug) dev_info(&pdev->dev, "running: onic_init_capacity");
 	rv = onic_init_capacity(priv);
+	if (debug) dev_info(&pdev->dev, "completed: onic_init_capacity");
 	if (rv < 0) {
 		dev_err(&pdev->dev, "onic_init_capacity, err = %d", rv);
 		goto free_netdev;
 	}
 
+	if (debug) dev_info(&pdev->dev, "running: onic_init_hardware");
 	rv = onic_init_hardware(priv);
+	if (debug) dev_info(&pdev->dev, "completed: onic_init_hardware");
 	if (rv < 0) {
 		dev_err(&pdev->dev, "onic_init_hardware, err = %d", rv);
 		goto clear_capacity;
 	}
 
+	if (debug) dev_info(&pdev->dev, "running: onic_init_interrupt");
 	rv = onic_init_interrupt(priv);
+	if (debug) dev_info(&pdev->dev, "completed: onic_init_interrupt");
 	if (rv < 0) {
 		dev_err(&pdev->dev, "onic_init_interrupt, err = %d", rv);
 		goto clear_hardware;
@@ -224,14 +231,20 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	netif_set_real_num_tx_queues(netdev, priv->num_tx_queues);
 	netif_set_real_num_rx_queues(netdev, priv->num_rx_queues);
 
+	if (debug) dev_info(&pdev->dev, "running: register_netdev");
 	rv = register_netdev(netdev);
+	if (debug) dev_info(&pdev->dev, "completed: register_netdev");
 	if (rv < 0) {
 		dev_err(&pdev->dev, "register_netdev, err = %d", rv);
 		goto clear_interrupt;
 	}
 
+	if (debug) dev_info(&pdev->dev, "running: pci_set_drvdata");
 	pci_set_drvdata(pdev, priv);
+	if (debug) dev_info(&pdev->dev, "completed: pci_set_drvdata");
+	if (debug) dev_info(&pdev->dev, "running: netif_carrier_off");
 	netif_carrier_off(netdev);
+	if (debug) dev_info(&pdev->dev, "completed: netif_carrier_off");
 	return 0;
 
 clear_interrupt:
