@@ -37,7 +37,7 @@ char onic_drv_name[] = "onic";
 char onic_drv_name[] = "open-nic-vf";
 #endif
 
-#define DRV_VER "0.2"
+#define DRV_VER "0.21"
 const char onic_drv_str[] = DRV_STR;
 const char onic_drv_ver[] = DRV_VER;
 

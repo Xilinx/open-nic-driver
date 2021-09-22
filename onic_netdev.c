@@ -76,7 +76,7 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 
         dma_unmap_single(&priv->pdev->dev, buf->dma_addr,
                          buf->len, DMA_TO_DEVICE);
-        dev_kfree_skb(skb);
+        dev_kfree_skb_any(skb);
 
         onic_ring_increment_tail(ring);
     }
@@ -636,8 +636,10 @@ out_of_budget:
 
         dma_addr = dma_map_single(&priv->pdev->dev,
                                   skb->data,
-                                  skb->data_len,
-                                  DMA_TO_DEVICE);
+                                  skb-> data_len == 0? skb->len : skb->data_len,
+                                  DMA_TO_DEVICE
+                                 );
+
         if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
             netdev_err(dev, "dma map error, skb = %p, dma_addr = %llx",
                        skb, dma_addr);
@@ -652,7 +654,7 @@ out_of_budget:
 
         q->buffer[ring->next_to_use].skb = skb;
         q->buffer[ring->next_to_use].dma_addr = dma_addr;
-        q->buffer[ring->next_to_use].len = skb->data_len;
+        q->buffer[ring->next_to_use].len = skb-> data_len == 0? skb->len : skb->data_len;
 
         priv->netdev_stats.tx_packets++;
         priv->netdev_stats.tx_bytes += skb->len;
@@ -696,7 +698,7 @@ out_of_budget:
         return 0;
     }
 
-    void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+    inline void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
     {
         struct onic_private *priv = netdev_priv(dev);
 
