@@ -23,6 +23,7 @@
 #define ONIC_CMAC_CORE_VERSION		0x00000301
 
 struct onic_hardware {
+    int RS_FEC;
 	unsigned long qdma;
 	u8 num_cmacs;
 	void __iomem *addr;	/* mapping of shell registers */

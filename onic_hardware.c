@@ -196,9 +196,11 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 	if (cmac_id != 0 && cmac_id != 1)
 		return -EINVAL;
 
+    if (hw->RS_FEC) {
 	/* Enable RS-FEC for CMACs with RS-FEC implemented */
 	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
 	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
+    }
 
 	if (cmac_id == 0) {
 		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x2);
@@ -256,6 +258,8 @@ int onic_init_hardware(struct onic_private *priv)
 	u32 val;
 	u8 master_pf = test_bit(ONIC_FLAG_MASTER_PF, priv->flags);
 	int i, rv;
+
+        priv->hw.RS_FEC = priv->RS_FEC;
 
 	/* shell registers uses BAR-2 */
 	hw->addr = pci_iomap_range(pdev, 2, SHELL_START, SHELL_MAXLEN);

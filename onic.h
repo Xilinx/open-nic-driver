@@ -97,6 +97,8 @@ struct onic_private {
 	DECLARE_BITMAP(state, 32);
 	DECLARE_BITMAP(flags, 32);
 
+        int RS_FEC;
+
 	u16 num_q_vectors;
 	u16 num_tx_queues;
 	u16 num_rx_queues;
