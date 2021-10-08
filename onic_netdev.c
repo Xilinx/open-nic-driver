@@ -540,7 +540,7 @@ out_of_budget:
         return 0;
 
         clear_tx_resource:
-        while (--qid)
+        while (qid--)
             onic_clear_tx_queue(priv, qid);
         return rv;
     }
@@ -562,7 +562,7 @@ out_of_budget:
         return 0;
 
         clear_rx_resource:
-        while (--qid)
+        while (qid--)
             onic_clear_rx_queue(priv, qid);
         return rv;
     }
