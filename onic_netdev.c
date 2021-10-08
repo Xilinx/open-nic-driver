@@ -636,7 +636,7 @@ out_of_budget:
 
         dma_addr = dma_map_single(&priv->pdev->dev,
                                   skb->data,
-                                  skb-> data_len == 0? skb->len : skb->data_len,
+                                  skb->len,
                                   DMA_TO_DEVICE
                                  );
 
@@ -654,7 +654,7 @@ out_of_budget:
 
         q->buffer[ring->next_to_use].skb = skb;
         q->buffer[ring->next_to_use].dma_addr = dma_addr;
-        q->buffer[ring->next_to_use].len = skb-> data_len == 0? skb->len : skb->data_len;
+        q->buffer[ring->next_to_use].len = skb->len;
 
         priv->netdev_stats.tx_packets++;
         priv->netdev_stats.tx_bytes += skb->len;
