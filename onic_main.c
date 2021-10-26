@@ -49,6 +49,8 @@ MODULE_VERSION(DRV_VER);
 static int RS_FEC_ENABLED=1;
 module_param(RS_FEC_ENABLED, int, 0644);
 
+static int MASTER_PF=0;
+module_param(MASTER_PF, int, 0444);
 
 static const struct pci_device_id onic_pci_tbl[] = {
 	/* Gen 3 PF */
@@ -197,11 +199,11 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	onic_set_mac_address(netdev, (void *)&saddr);
 
 	priv = netdev_priv(netdev);
-        priv->RS_FEC = RS_FEC_ENABLED;
+	priv->RS_FEC = RS_FEC_ENABLED;
 
 	memset(priv, 0, sizeof(struct onic_private));
 
-	if (PCI_FUNC(pdev->devfn) == 0) {
+	if (PCI_FUNC(pdev->devfn) == MASTER_PF) {
 		dev_info(&pdev->dev, "device is a master PF");
 		set_bit(ONIC_FLAG_MASTER_PF, priv->flags);
 	}
