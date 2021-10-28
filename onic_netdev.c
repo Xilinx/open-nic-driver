@@ -709,9 +709,10 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 				  DMA_TO_DEVICE);
 
 	if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
-		netdev_err(dev, "dma map error, skb = %p, dma_addr = %llx", skb,
-			   dma_addr);
-		return NETDEV_TX_BUSY;
+		dev_kfree_skb(skb);
+		priv->netdev_stats.tx_dropped++;
+		priv->netdev_stats.tx_errors++;
+		return NETDEV_TX_OK;
 	}
 
 	desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
@@ -776,4 +777,6 @@ inline void onic_get_stats64(struct net_device *dev,
 	stats->tx_bytes = priv->netdev_stats.tx_bytes;
 	stats->rx_packets = priv->netdev_stats.rx_packets;
 	stats->rx_bytes = priv->netdev_stats.rx_bytes;
+	stats->tx_dropped = priv->netdev_stats.tx_dropped;
+	stats->tx_errors = priv->netdev_stats.tx_errors;
 }
