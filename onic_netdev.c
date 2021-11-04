@@ -423,12 +423,8 @@ static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
 
 	onic_qdma_clear_rx_queue(priv->hw.qdma, qid);
 
-	/* No need to call netif_napi_del explicitly as failures will propogate,
-         * forcing net device to be unregistered.  After that, free_netdev will
-         * call netif_napi_del for all napi_structs still associated with the
-         * net device.
-         */
 	napi_disable(&q->napi);
+	netif_napi_del(&q->napi);
 
 	ring = &q->desc_ring;
 	real_count = ring->count - 1;
