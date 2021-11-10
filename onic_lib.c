@@ -152,7 +152,7 @@ static int onic_acquire_msix_vectors(struct onic_private *priv)
 	vectors += non_q_vectors;
 
 	vectors = pci_alloc_irq_vectors(priv->pdev, non_q_vectors + 1, vectors,
-					PCI_IRQ_AFFINITY | PCI_IRQ_MSIX);
+					PCI_IRQ_MSIX);
 	if (vectors < 0) {
 		dev_err(&priv->pdev->dev,
 			"Failed to allocate vectors in the range [%d, %d]",
