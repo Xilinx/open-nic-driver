@@ -156,7 +156,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_err(&pdev->dev, "Failed to set DMA masks");
 		goto disable_device;
 	} else {
-		dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+		dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
 	}
 
 	rv = pci_request_mem_regions(pdev, onic_drv_name);

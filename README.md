@@ -62,13 +62,6 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 
 ## Known Issues
 
-### IOMMU
-
-IOMMU is required to make the driver work.  To enable IOMMU, first check the
-BIOS settings to make sure that it is enabled.  If the CPU is an Intel processor, add 
-`intel_iommu=on` to the boot parameters.  No changes are necessary for AMD processors. Run 
-`update-grub` and reboot the server.
-
 ### Static IP Address
 
 It has been found that in some cases, DHCP clients may cause kernel panic after
