@@ -16,8 +16,9 @@ Follow the steps below to build the driver.
 2. Connect 100Gbps cables/loopback adapters to enabled ports before insert the
    kernel module.  Currently, the driver does not detect link status change.
    Thus links should be ready before loading the driver.
-3. Run `sudo insmod onic.ko` to insert the kernel module.
-4. Verify that no error message is printed through `dmesg`, and new devices show
+3. Run `sudo insmod onic.ko` to insert the kernel module. (There is an optional 
+   parameter RS_FEC_ENABLED, which can be set to either zero or one.)
+5. Verify that no error message is printed through `dmesg`, and new devices show
    up in `ifconfig` output.
 
 The driver registers a net device for each PF it probed.  Net devices are
