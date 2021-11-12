@@ -41,16 +41,15 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+	struct onic_private *priv = dev_id;
 	dev_info(&priv->pdev->dev, "user irq");
 	return IRQ_WAKE_THREAD;
 }
 
 static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+	struct onic_private *priv = dev_id;
+
 	dev_info(&priv->pdev->dev,
 		"User IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
@@ -65,8 +64,8 @@ static irqreturn_t onic_error_handler(int irq, void *dev_id)
 
 static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 {
-	struct onic_q_vector *vec = dev_id;
-        struct onic_private *priv = vec->priv;
+	struct onic_private *priv = dev_id;
+
 	dev_err(&priv->pdev->dev,
 		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);

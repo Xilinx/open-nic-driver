@@ -197,9 +197,9 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	onic_set_mac_address(netdev, (void *)&saddr);
 
 	priv = netdev_priv(netdev);
-        priv->RS_FEC = RS_FEC_ENABLED;
 
 	memset(priv, 0, sizeof(struct onic_private));
+	priv->RS_FEC = RS_FEC_ENABLED;
 
 	if (PCI_FUNC(pdev->devfn) == 0) {
 		dev_info(&pdev->dev, "device is a master PF");
