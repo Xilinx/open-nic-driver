@@ -749,9 +749,9 @@ int onic_set_mac_address(struct net_device *dev, void *addr)
 	if (!is_valid_ether_addr(saddr->sa_data))
 		return -EADDRNOTAVAIL;
 
-	netdev_info(dev, "Set MAC address to %x:%x:%x:%x:%x:%x", dev_addr[0],
-		    dev_addr[1], dev_addr[2], dev_addr[3], dev_addr[4],
-		    dev_addr[5]);
+	netdev_info(dev, "Set MAC address to %02x:%02x:%02x:%02x:%02x:%02x",
+			dev_addr[0], dev_addr[1], dev_addr[2],
+			dev_addr[3], dev_addr[4], dev_addr[5]);
 	memcpy(dev->dev_addr, dev_addr, dev->addr_len);
 	return 0;
 }
@@ -763,7 +763,7 @@ int onic_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
 int onic_change_mtu(struct net_device *dev, int mtu)
 {
-	netdev_info(dev, "Reqeusted MTU = %d", mtu);
+	netdev_info(dev, "Requested MTU = %d", mtu);
 	return 0;
 }
 
