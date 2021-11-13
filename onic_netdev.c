@@ -303,424 +303,431 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	}
 
 out_of_budget:
-        if (debug) netdev_info(q->netdev, "rx_poll is done");
-        if (debug) netdev_info(q->netdev, "rx_poll returning work %u, rx_packets %lld, rx_bytes %lld", work, priv->netdev_stats.rx_packets, priv->netdev_stats.rx_bytes);
-        return work;
-    }
+	if (debug)
+		netdev_info(q->netdev, "rx_poll is done");
+	if (debug)
+		netdev_info(
+			q->netdev,
+			"rx_poll returning work %u, rx_packets %lld, rx_bytes %lld",
+			work, priv->netdev_stats.rx_packets,
+			priv->netdev_stats.rx_bytes);
+	return work;
+}
 
+static void onic_clear_tx_queue(struct onic_private *priv, u16 qid)
+{
+	struct onic_tx_queue *q = priv->tx_queue[qid];
+	struct onic_ring *ring;
+	u32 size;
+	int real_count;
 
-    static void onic_clear_tx_queue(struct onic_private *priv, u16 qid)
-    {
-        struct onic_tx_queue *q = priv->tx_queue[qid];
-        struct onic_ring *ring;
-        u32 size;
-        int real_count;
+	if (!q)
+		return;
 
-        if (!q)
-            return;
+	onic_qdma_clear_tx_queue(priv->hw.qdma, qid);
 
-        onic_qdma_clear_tx_queue(priv->hw.qdma, qid);
+	ring = &q->ring;
+	real_count = ring->count - 1;
+	size = QDMA_H2C_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
 
-        ring = &q->ring;
-        real_count = ring->count - 1;
-        size = QDMA_H2C_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
+	if (ring->desc)
+		dma_free_coherent(&priv->pdev->dev, size, ring->desc,
+				  ring->dma_addr);
+	kfree(q->buffer);
+	kfree(q);
+	priv->tx_queue[qid] = NULL;
+}
 
-        if (ring->desc)
-            dma_free_coherent(&priv->pdev->dev, size, ring->desc,
-                              ring->dma_addr);
-        kfree(q->buffer);
-        kfree(q);
-        priv->tx_queue[qid] = NULL;
-    }
+static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
+{
+	const u8 rngcnt_idx = 0;
+	struct net_device *dev = priv->netdev;
+	struct onic_tx_queue *q;
+	struct onic_ring *ring;
+	struct onic_qdma_h2c_param param;
+	u16 vid;
+	u32 size, real_count;
+	int rv;
+	bool debug = 0;
 
-    static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
-    {
-        const u8 rngcnt_idx = 0;
-        struct net_device *dev = priv->netdev;
-        struct onic_tx_queue *q;
-        struct onic_ring *ring;
-        struct onic_qdma_h2c_param param;
-        u16 vid;
-        u32 size, real_count;
-        int rv;
-        bool debug=0;
+	if (priv->tx_queue[qid]) {
+		if (debug)
+			netdev_info(dev, "Re-initializing TX queue %d", qid);
+		onic_clear_tx_queue(priv, qid);
+	}
 
+	q = kzalloc(sizeof(struct onic_tx_queue), GFP_KERNEL);
+	if (!q)
+		return -ENOMEM;
 
-        if (priv->tx_queue[qid]) {
-            if (debug) netdev_info(dev, "Re-initializing TX queue %d", qid);
-            onic_clear_tx_queue(priv, qid);
-        }
+	/* evenly assign to TX queues available vectors */
+	vid = qid % priv->num_q_vectors;
 
-        q = kzalloc(sizeof(struct onic_tx_queue), GFP_KERNEL);
-        if (!q)
-            return -ENOMEM;
+	q->netdev = dev;
+	q->vector = priv->q_vector[vid];
+	q->qid = qid;
 
-        /* evenly assign to TX queues available vectors */
-        vid = qid % priv->num_q_vectors;
+	ring = &q->ring;
+	ring->count = onic_ring_count(rngcnt_idx);
+	real_count = ring->count - 1;
 
-        q->netdev = dev;
-        q->vector = priv->q_vector[vid];
-        q->qid = qid;
+	/* allocate DMA memory for TX descriptor ring */
+	size = QDMA_H2C_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
+	ring->desc = dma_alloc_coherent(&priv->pdev->dev, size, &ring->dma_addr,
+					GFP_KERNEL);
+	if (!ring->desc) {
+		rv = -ENOMEM;
+		goto clear_tx_queue;
+	}
+	memset(ring->desc, 0, size);
+	ring->wb = ring->desc + QDMA_H2C_ST_DESC_SIZE * real_count;
+	ring->next_to_use = 0;
+	ring->next_to_clean = 0;
+	ring->color = 0;
 
-        ring = &q->ring;
-        ring->count = onic_ring_count(rngcnt_idx);
-        real_count = ring->count - 1;
+	/* initialize TX buffers */
+	q->buffer =
+		kcalloc(real_count, sizeof(struct onic_tx_buffer), GFP_KERNEL);
+	if (!q->buffer) {
+		rv = -ENOMEM;
+		goto clear_tx_queue;
+	}
 
-        /* allocate DMA memory for TX descriptor ring */
-        size = QDMA_H2C_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
-        ring->desc = dma_alloc_coherent(&priv->pdev->dev, size,
-                                        &ring->dma_addr, GFP_KERNEL);
-        if (!ring->desc) {
-            rv = -ENOMEM;
-            goto clear_tx_queue;
-        }
-        memset(ring->desc, 0, size);
-        ring->wb = ring->desc + QDMA_H2C_ST_DESC_SIZE * real_count;
-        ring->next_to_use = 0;
-        ring->next_to_clean = 0;
-        ring->color = 0;
+	/* initialize QDMA H2C queue */
+	param.rngcnt_idx = rngcnt_idx;
+	param.dma_addr = ring->dma_addr;
+	param.vid = vid;
+	rv = onic_qdma_init_tx_queue(priv->hw.qdma, qid, &param);
+	if (rv < 0)
+		goto clear_tx_queue;
 
-        /* initialize TX buffers */
-        q->buffer = kcalloc(real_count, sizeof(struct onic_tx_buffer),
-                            GFP_KERNEL);
-        if (!q->buffer) {
-            rv = -ENOMEM;
-            goto clear_tx_queue;
-        }
+	priv->tx_queue[qid] = q;
+	return 0;
 
-        /* initialize QDMA H2C queue */
-        param.rngcnt_idx = rngcnt_idx;
-        param.dma_addr = ring->dma_addr;
-        param.vid = vid;
-        rv = onic_qdma_init_tx_queue(priv->hw.qdma, qid, &param);
-        if (rv < 0)
-            goto clear_tx_queue;
+clear_tx_queue:
+	onic_clear_tx_queue(priv, qid);
+	return rv;
+}
 
-        priv->tx_queue[qid] = q;
-        return 0;
+static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
+{
+	struct onic_rx_queue *q = priv->rx_queue[qid];
+	struct onic_ring *ring;
+	u32 size;
+	int real_count;
 
-        clear_tx_queue:
-        onic_clear_tx_queue(priv, qid);
-        return rv;
-    }
+	if (!q)
+		return;
 
-    static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
-    {
-        struct onic_rx_queue *q = priv->rx_queue[qid];
-        struct onic_ring *ring;
-        u32 size;
-        int real_count;
+	onic_qdma_clear_rx_queue(priv->hw.qdma, qid);
 
-        if (!q)
-            return;
-
-        onic_qdma_clear_rx_queue(priv->hw.qdma, qid);
-
-        /* No need to call netif_napi_del explicitly as failures will propogate,
+	/* No need to call netif_napi_del explicitly as failures will propogate,
          * forcing net device to be unregistered.  After that, free_netdev will
          * call netif_napi_del for all napi_structs still associated with the
          * net device.
          */
-        napi_disable(&q->napi);
+	napi_disable(&q->napi);
 
-        ring = &q->desc_ring;
-        real_count = ring->count - 1;
-        size = QDMA_C2H_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
+	ring = &q->desc_ring;
+	real_count = ring->count - 1;
+	size = QDMA_C2H_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
 
-        if (ring->desc)
-            dma_free_coherent(&priv->pdev->dev, size,
-                              ring->desc, ring->dma_addr);
+	if (ring->desc)
+		dma_free_coherent(&priv->pdev->dev, size, ring->desc,
+				  ring->dma_addr);
 
-        ring = &q->cmpl_ring;
-        real_count = ring->count - 1;
-        size = QDMA_C2H_CMPL_SIZE * real_count + QDMA_C2H_CMPL_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
+	ring = &q->cmpl_ring;
+	real_count = ring->count - 1;
+	size = QDMA_C2H_CMPL_SIZE * real_count + QDMA_C2H_CMPL_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
 
-        if (ring->desc)
-            dma_free_coherent(&priv->pdev->dev, size,
-                              ring->desc, ring->dma_addr);
+	if (ring->desc)
+		dma_free_coherent(&priv->pdev->dev, size, ring->desc,
+				  ring->dma_addr);
 
-        kfree(q->buffer);
-        kfree(q);
-        priv->rx_queue[qid] = NULL;
-    }
+	kfree(q->buffer);
+	kfree(q);
+	priv->rx_queue[qid] = NULL;
+}
 
-    static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
-    {
-        const u8 bufsz_idx = 13;
-        const u8 desc_rngcnt_idx = 13;
-        //const u8 cmpl_rngcnt_idx = 15;
-        const u8 cmpl_rngcnt_idx = 13;
-        struct net_device *dev = priv->netdev;
-        struct onic_rx_queue *q;
-        struct onic_ring *ring;
-        struct onic_qdma_c2h_param param;
-        u16 vid;
-        u32 size, real_count;
-        int i, rv;
-        bool debug=0;
+static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
+{
+	const u8 bufsz_idx = 13;
+	const u8 desc_rngcnt_idx = 13;
+	//const u8 cmpl_rngcnt_idx = 15;
+	const u8 cmpl_rngcnt_idx = 13;
+	struct net_device *dev = priv->netdev;
+	struct onic_rx_queue *q;
+	struct onic_ring *ring;
+	struct onic_qdma_c2h_param param;
+	u16 vid;
+	u32 size, real_count;
+	int i, rv;
+	bool debug = 0;
 
+	if (priv->rx_queue[qid]) {
+		if (debug)
+			netdev_info(dev, "Re-initializing RX queue %d", qid);
+		onic_clear_rx_queue(priv, qid);
+	}
 
-        if (priv->rx_queue[qid]) {
-            if (debug) netdev_info(dev, "Re-initializing RX queue %d", qid);
-            onic_clear_rx_queue(priv, qid);
-        }
+	q = kzalloc(sizeof(struct onic_rx_queue), GFP_KERNEL);
+	if (!q)
+		return -ENOMEM;
 
-        q = kzalloc(sizeof(struct onic_rx_queue), GFP_KERNEL);
-        if (!q)
-            return -ENOMEM;
+	/* evenly assign to RX queues available vectors */
+	vid = qid % priv->num_q_vectors;
 
-        /* evenly assign to RX queues available vectors */
-        vid = qid % priv->num_q_vectors;
+	q->netdev = dev;
+	q->vector = priv->q_vector[vid];
+	q->qid = qid;
 
-        q->netdev = dev;
-        q->vector = priv->q_vector[vid];
-        q->qid = qid;
+	/* allocate DMA memory for RX descriptor ring */
+	ring = &q->desc_ring;
+	ring->count = onic_ring_count(desc_rngcnt_idx);
+	real_count = ring->count - 1;
 
-        /* allocate DMA memory for RX descriptor ring */
-        ring = &q->desc_ring;
-        ring->count = onic_ring_count(desc_rngcnt_idx);
-        real_count = ring->count - 1;
+	size = QDMA_C2H_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
+	ring->desc = dma_alloc_coherent(&priv->pdev->dev, size, &ring->dma_addr,
+					GFP_KERNEL);
+	if (!ring->desc) {
+		rv = -ENOMEM;
+		goto clear_rx_queue;
+	}
+	memset(ring->desc, 0, size);
+	ring->wb = ring->desc + QDMA_C2H_ST_DESC_SIZE * real_count;
+	ring->next_to_use = 0;
+	ring->next_to_clean = 0;
+	ring->color = 0;
 
-        size = QDMA_C2H_ST_DESC_SIZE * real_count + QDMA_WB_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
-        ring->desc = dma_alloc_coherent(&priv->pdev->dev, size,
-                                        &ring->dma_addr, GFP_KERNEL);
-        if (!ring->desc) {
-            rv = -ENOMEM;
-            goto clear_rx_queue;
-        }
-        memset(ring->desc, 0, size);
-        ring->wb = ring->desc + QDMA_C2H_ST_DESC_SIZE * real_count;
-        ring->next_to_use = 0;
-        ring->next_to_clean = 0;
-        ring->color = 0;
+	/* initialize RX buffers */
+	q->buffer =
+		kcalloc(real_count, sizeof(struct onic_rx_buffer), GFP_KERNEL);
+	if (!q->buffer) {
+		rv = -ENOMEM;
+		goto clear_rx_queue;
+	}
 
-        /* initialize RX buffers */
-        q->buffer = kcalloc(real_count, sizeof(struct onic_rx_buffer),
-                            GFP_KERNEL);
-        if (!q->buffer) {
-            rv = -ENOMEM;
-            goto clear_rx_queue;
-        }
+	for (i = 0; i < real_count; ++i) {
+		struct page *pg = dev_alloc_pages(0);
 
-        for (i = 0; i < real_count; ++i) {
-            struct page *pg = dev_alloc_pages(0);
+		if (!pg) {
+			rv = -ENOMEM;
+			goto clear_rx_queue;
+		}
 
-            if (!pg) {
-                rv = -ENOMEM;
-                goto clear_rx_queue;
-            }
+		q->buffer[i].pg = pg;
+		q->buffer[i].offset = 0;
+	}
 
-            q->buffer[i].pg = pg;
-            q->buffer[i].offset = 0;
-        }
+	/* map pages and initialize descriptors */
+	for (i = 0; i < real_count; ++i) {
+		u8 *desc_ptr = ring->desc + QDMA_C2H_ST_DESC_SIZE * i;
+		struct qdma_c2h_st_desc desc;
+		struct page *pg = q->buffer[i].pg;
+		unsigned int offset = q->buffer[i].offset;
 
-        /* map pages and initialize descriptors */
-        for (i = 0; i < real_count; ++i) {
-            u8 *desc_ptr = ring->desc + QDMA_C2H_ST_DESC_SIZE * i;
-            struct qdma_c2h_st_desc desc;
-            struct page *pg = q->buffer[i].pg;
-            unsigned int offset = q->buffer[i].offset;
+		desc.dst_addr = dma_map_page(&priv->pdev->dev, pg, 0, PAGE_SIZE,
+					     DMA_FROM_DEVICE);
+		desc.dst_addr += offset;
 
-            desc.dst_addr = dma_map_page(&priv->pdev->dev, pg, 0,
-                                         PAGE_SIZE,
-                                         DMA_FROM_DEVICE);
-            desc.dst_addr += offset;
+		qdma_pack_c2h_st_desc(desc_ptr, &desc);
+	}
 
-            qdma_pack_c2h_st_desc(desc_ptr, &desc);
-        }
+	/* allocate DMA memory for completion ring */
+	ring = &q->cmpl_ring;
+	ring->count = onic_ring_count(cmpl_rngcnt_idx);
+	real_count = ring->count - 1;
 
-        /* allocate DMA memory for completion ring */
-        ring = &q->cmpl_ring;
-        ring->count = onic_ring_count(cmpl_rngcnt_idx);
-        real_count = ring->count - 1;
+	size = QDMA_C2H_CMPL_SIZE * real_count + QDMA_C2H_CMPL_STAT_SIZE;
+	size = ALIGN(size, PAGE_SIZE);
+	ring->desc = dma_alloc_coherent(&priv->pdev->dev, size, &ring->dma_addr,
+					GFP_KERNEL);
+	if (!ring->desc) {
+		rv = -ENOMEM;
+		goto clear_rx_queue;
+	}
+	memset(ring->desc, 0, size);
+	ring->wb = ring->desc + QDMA_C2H_CMPL_SIZE * real_count;
+	ring->next_to_use = 0;
+	ring->next_to_clean = 0;
+	ring->color = 1;
 
-        size = QDMA_C2H_CMPL_SIZE * real_count + QDMA_C2H_CMPL_STAT_SIZE;
-        size = ALIGN(size, PAGE_SIZE);
-        ring->desc = dma_alloc_coherent(&priv->pdev->dev, size,
-                                        &ring->dma_addr, GFP_KERNEL);
-        if (!ring->desc) {
-            rv = -ENOMEM;
-            goto clear_rx_queue;
-        }
-        memset(ring->desc, 0, size);
-        ring->wb = ring->desc + QDMA_C2H_CMPL_SIZE * real_count;
-        ring->next_to_use = 0;
-        ring->next_to_clean = 0;
-        ring->color = 1;
+	netif_napi_add(dev, &q->napi, onic_rx_poll, 64);
+	napi_enable(&q->napi);
 
-        netif_napi_add(dev, &q->napi, onic_rx_poll, 64);
-        napi_enable(&q->napi);
+	/* initialize QDMA C2H queue */
+	param.bufsz_idx = bufsz_idx;
+	param.desc_rngcnt_idx = desc_rngcnt_idx;
+	param.cmpl_rngcnt_idx = cmpl_rngcnt_idx;
+	param.cmpl_desc_sz = 0;
+	param.desc_dma_addr = q->desc_ring.dma_addr;
+	param.cmpl_dma_addr = q->cmpl_ring.dma_addr;
+	param.vid = vid;
+	if (debug)
+		netdev_info(
+			dev,
+			"bufsz_idx %u, desc_rngcnt_idx %u, cmpl_rngcnt_idx %u, desc_dma_addr 0x%llx, cmpl_dma_addr 0x%llx, vid %d",
+			bufsz_idx, desc_rngcnt_idx, cmpl_rngcnt_idx,
+			q->desc_ring.dma_addr, q->cmpl_ring.dma_addr, vid);
 
-        /* initialize QDMA C2H queue */
-        param.bufsz_idx = bufsz_idx;
-        param.desc_rngcnt_idx = desc_rngcnt_idx;
-        param.cmpl_rngcnt_idx = cmpl_rngcnt_idx;
-        param.cmpl_desc_sz = 0;
-        param.desc_dma_addr = q->desc_ring.dma_addr;
-        param.cmpl_dma_addr = q->cmpl_ring.dma_addr;
-        param.vid = vid;
-        if (debug) netdev_info(dev, "bufsz_idx %u, desc_rngcnt_idx %u, cmpl_rngcnt_idx %u, desc_dma_addr 0x%llx, cmpl_dma_addr 0x%llx, vid %d", bufsz_idx, desc_rngcnt_idx, cmpl_rngcnt_idx, q->desc_ring.dma_addr, q->cmpl_ring.dma_addr, vid);
+	rv = onic_qdma_init_rx_queue(priv->hw.qdma, qid, &param);
+	if (rv < 0)
+		goto clear_rx_queue;
 
+	/* fill RX descriptor ring with a few descriptors */
+	q->desc_ring.next_to_use = ONIC_RX_DESC_STEP;
+	onic_set_rx_head(priv->hw.qdma, qid, q->desc_ring.next_to_use);
+	onic_set_completion_tail(priv->hw.qdma, qid, 0, 1);
 
-        rv = onic_qdma_init_rx_queue(priv->hw.qdma, qid, &param);
-        if (rv < 0)
-            goto clear_rx_queue;
+	priv->rx_queue[qid] = q;
+	return 0;
 
-        /* fill RX descriptor ring with a few descriptors */
-        q->desc_ring.next_to_use = ONIC_RX_DESC_STEP;
-        onic_set_rx_head(priv->hw.qdma, qid, q->desc_ring.next_to_use);
-        onic_set_completion_tail(priv->hw.qdma, qid, 0, 1);
+clear_rx_queue:
+	onic_clear_rx_queue(priv, qid);
+	return rv;
+}
 
-        priv->rx_queue[qid] = q;
-        return 0;
+static int onic_init_tx_resource(struct onic_private *priv)
+{
+	struct net_device *dev = priv->netdev;
+	int qid, rv;
 
-        clear_rx_queue:
-        onic_clear_rx_queue(priv, qid);
-        return rv;
-    }
+	for (qid = 0; qid < priv->num_tx_queues; ++qid) {
+		rv = onic_init_tx_queue(priv, qid);
+		if (!rv)
+			continue;
 
-    static int onic_init_tx_resource(struct onic_private *priv)
-    {
-        struct net_device *dev = priv->netdev;
-        int qid, rv;
+		netdev_err(dev, "onic_init_tx_queue %d, err = %d", qid, rv);
+		goto clear_tx_resource;
+	}
 
-        for (qid = 0; qid < priv->num_tx_queues; ++qid) {
-            rv = onic_init_tx_queue(priv, qid);
-            if (!rv)
-                continue;
+	return 0;
 
-            netdev_err(dev, "onic_init_tx_queue %d, err = %d", qid, rv);
-            goto clear_tx_resource;
-        }
+clear_tx_resource:
+	while (qid--)
+		onic_clear_tx_queue(priv, qid);
+	return rv;
+}
 
-        return 0;
+static int onic_init_rx_resource(struct onic_private *priv)
+{
+	struct net_device *dev = priv->netdev;
+	int qid, rv;
 
-        clear_tx_resource:
-        while (qid--)
-            onic_clear_tx_queue(priv, qid);
-        return rv;
-    }
+	for (qid = 0; qid < priv->num_rx_queues; ++qid) {
+		rv = onic_init_rx_queue(priv, qid);
+		if (!rv)
+			continue;
 
-    static int onic_init_rx_resource(struct onic_private *priv)
-    {
-        struct net_device *dev = priv->netdev;
-        int qid, rv;
+		netdev_err(dev, "onic_init_rx_queue %d, err = %d", qid, rv);
+		goto clear_rx_resource;
+	}
 
-        for (qid = 0; qid < priv->num_rx_queues; ++qid) {
-            rv = onic_init_rx_queue(priv, qid);
-            if (!rv)
-                continue;
+	return 0;
 
-            netdev_err(dev, "onic_init_rx_queue %d, err = %d", qid, rv);
-            goto clear_rx_resource;
-        }
+clear_rx_resource:
+	while (qid--)
+		onic_clear_rx_queue(priv, qid);
+	return rv;
+}
 
-        return 0;
+int onic_open_netdev(struct net_device *dev)
+{
+	struct onic_private *priv = netdev_priv(dev);
+	int rv;
 
-        clear_rx_resource:
-        while (qid--)
-            onic_clear_rx_queue(priv, qid);
-        return rv;
-    }
+	rv = onic_init_tx_resource(priv);
+	if (rv < 0)
+		goto stop_netdev;
 
-    int onic_open_netdev(struct net_device *dev)
-    {
-        struct onic_private *priv = netdev_priv(dev);
-        int rv;
+	rv = onic_init_rx_resource(priv);
+	if (rv < 0)
+		goto stop_netdev;
 
-        rv = onic_init_tx_resource(priv);
-        if (rv < 0)
-            goto stop_netdev;
+	netif_tx_start_all_queues(dev);
+	netif_carrier_on(dev);
+	return 0;
 
-        rv = onic_init_rx_resource(priv);
-        if (rv < 0)
-            goto stop_netdev;
+stop_netdev:
+	onic_stop_netdev(dev);
+	return rv;
+}
 
-        netif_tx_start_all_queues(dev);
-        netif_carrier_on(dev);
-        return 0;
+int onic_stop_netdev(struct net_device *dev)
+{
+	struct onic_private *priv = netdev_priv(dev);
+	int qid;
 
-        stop_netdev:
-        onic_stop_netdev(dev);
-        return rv;
-    }
+	/* stop sending */
+	netif_carrier_off(dev);
+	netif_tx_stop_all_queues(dev);
 
-    int onic_stop_netdev(struct net_device *dev)
-    {
-        struct onic_private *priv = netdev_priv(dev);
-        int qid;
+	for (qid = 0; qid < priv->num_tx_queues; ++qid)
+		onic_clear_tx_queue(priv, qid);
+	for (qid = 0; qid < priv->num_rx_queues; ++qid)
+		onic_clear_rx_queue(priv, qid);
 
-        /* stop sending */
-        netif_carrier_off(dev);
-        netif_tx_stop_all_queues(dev);
+	return 0;
+}
 
-        for (qid = 0; qid < priv->num_tx_queues; ++qid)
-            onic_clear_tx_queue(priv, qid);
-        for (qid = 0; qid < priv->num_rx_queues; ++qid)
-            onic_clear_rx_queue(priv, qid);
+netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
+{
+	struct onic_private *priv = netdev_priv(dev);
+	struct onic_tx_queue *q;
+	struct onic_ring *ring;
+	struct qdma_h2c_st_desc desc;
+	u16 qid = skb->queue_mapping;
+	dma_addr_t dma_addr;
+	u8 *desc_ptr;
+	int rv;
+	bool debug = 0;
+	bool check_rv = 0;
 
-        return 0;
-    }
+	q = priv->tx_queue[qid];
+	ring = &q->ring;
 
-    netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
-    {
-        struct onic_private *priv = netdev_priv(dev);
-        struct onic_tx_queue *q;
-        struct onic_ring *ring;
-        struct qdma_h2c_st_desc desc;
-        u16 qid = skb->queue_mapping;
-        dma_addr_t dma_addr;
-        u8 *desc_ptr;
-        int rv;
-        bool debug=0;
-        bool check_rv =0;
+	onic_tx_clean(q);
 
-        q = priv->tx_queue[qid];
-        ring = &q->ring;
+	if (onic_ring_full(ring)) {
+		if (debug)
+			netdev_info(dev, "ring is full");
+		return NETDEV_TX_BUSY;
+	}
 
-        onic_tx_clean(q);
+	/* minimum Ethernet packet length is 60 */
+	rv = skb_put_padto(skb, ETH_ZLEN);
 
-        if (onic_ring_full(ring)) {
-            if (debug) netdev_info(dev, "ring is full");
-            return NETDEV_TX_BUSY;
-        }
+	if (rv < 0)
+		check_rv = 1;
 
-        /* minimum Ethernet packet length is 60 */
-        rv = skb_put_padto(skb, ETH_ZLEN);
+	dma_addr = dma_map_single(&priv->pdev->dev, skb->data, skb->len,
+				  DMA_TO_DEVICE);
 
-        if (rv<0) check_rv = 1;
+	if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
+		netdev_err(dev, "dma map error, skb = %p, dma_addr = %llx", skb,
+			   dma_addr);
+		return NETDEV_TX_BUSY;
+	}
 
-        dma_addr = dma_map_single(&priv->pdev->dev,
-                                  skb->data,
-                                  skb->len,
-                                  DMA_TO_DEVICE
-                                 );
+	desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
+	desc.len = skb->len;
+	desc.src_addr = dma_addr;
+	desc.metadata = skb->len;
+	qdma_pack_h2c_st_desc(desc_ptr, &desc);
 
-        if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
-            netdev_err(dev, "dma map error, skb = %p, dma_addr = %llx",
-                       skb, dma_addr);
-            return NETDEV_TX_BUSY;
-        }
+	q->buffer[ring->next_to_use].skb = skb;
+	q->buffer[ring->next_to_use].dma_addr = dma_addr;
+	q->buffer[ring->next_to_use].len = skb->len;
 
-        desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
-        desc.len = skb->len;
-        desc.src_addr = dma_addr;
-        desc.metadata = skb->len;
-        qdma_pack_h2c_st_desc(desc_ptr, &desc);
+	priv->netdev_stats.tx_packets++;
+	priv->netdev_stats.tx_bytes += skb->len;
 
-        q->buffer[ring->next_to_use].skb = skb;
-        q->buffer[ring->next_to_use].dma_addr = dma_addr;
-        q->buffer[ring->next_to_use].len = skb->len;
-
-        priv->netdev_stats.tx_packets++;
-        priv->netdev_stats.tx_bytes += skb->len;
-
-        onic_ring_increment_head(ring);
+	onic_ring_increment_head(ring);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 	if (onic_ring_full(ring) || !netdev_xmit_more()) {
