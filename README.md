@@ -1,5 +1,9 @@
 # OpenNIC Driver
 
+This is one of the two components of the
+[OpenNIC project](https://github.com/Xilinx/open-nic.git).  The other component is
+[OpenNIC shell](https://github.com/Xilinx/open-nic-shell.git).
+
 OpenNIC driver implements a Linux kernel driver for OpenNIC shell.  It supports
 multiple PCI-e PFs with multiple TX/RX queues in each PF, and up to two 100Gbps
 ports on the same card.  As of version 1.0, the driver has not implemented the
