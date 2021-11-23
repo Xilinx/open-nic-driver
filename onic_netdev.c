@@ -346,7 +346,6 @@ static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
 	struct onic_tx_queue *q;
 	struct onic_ring *ring;
 	struct onic_qdma_h2c_param param;
-	u16 vid;
 	u32 size, real_count;
 	int rv;
 	bool debug = 0;
@@ -361,11 +360,8 @@ static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
 	if (!q)
 		return -ENOMEM;
 
-	/* evenly assign to TX queues available vectors */
-	vid = qid % priv->num_q_vectors;
-
 	q->netdev = dev;
-	q->vector = priv->q_vector[vid];
+	q->vector = priv->q_vector[qid];
 	q->qid = qid;
 
 	ring = &q->ring;
@@ -398,7 +394,7 @@ static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
 	/* initialize QDMA H2C queue */
 	param.rngcnt_idx = rngcnt_idx;
 	param.dma_addr = ring->dma_addr;
-	param.vid = vid;
+	param.vid = priv->q_vector[qid]->vid;
 	rv = onic_qdma_init_tx_queue(priv->hw.qdma, qid, &param);
 	if (rv < 0)
 		goto clear_tx_queue;
@@ -459,7 +455,6 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	struct onic_rx_queue *q;
 	struct onic_ring *ring;
 	struct onic_qdma_c2h_param param;
-	u16 vid;
 	u32 size, real_count;
 	int i, rv;
 	bool debug = 0;
@@ -474,11 +469,8 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	if (!q)
 		return -ENOMEM;
 
-	/* evenly assign to RX queues available vectors */
-	vid = qid % priv->num_q_vectors;
-
 	q->netdev = dev;
-	q->vector = priv->q_vector[vid];
+	q->vector = priv->q_vector[qid];
 	q->qid = qid;
 
 	/* allocate DMA memory for RX descriptor ring */
@@ -563,13 +555,14 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	param.cmpl_desc_sz = 0;
 	param.desc_dma_addr = q->desc_ring.dma_addr;
 	param.cmpl_dma_addr = q->cmpl_ring.dma_addr;
-	param.vid = vid;
+	param.vid = priv->q_vector[qid]->vid;
 	if (debug)
 		netdev_info(
 			dev,
 			"bufsz_idx %u, desc_rngcnt_idx %u, cmpl_rngcnt_idx %u, desc_dma_addr 0x%llx, cmpl_dma_addr 0x%llx, vid %d",
 			bufsz_idx, desc_rngcnt_idx, cmpl_rngcnt_idx,
-			q->desc_ring.dma_addr, q->cmpl_ring.dma_addr, vid);
+			q->desc_ring.dma_addr, q->cmpl_ring.dma_addr,
+			priv->q_vector[qid]->vid);
 
 	rv = onic_qdma_init_rx_queue(priv->hw.qdma, qid, &param);
 	if (rv < 0)
