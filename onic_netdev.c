@@ -728,8 +728,10 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 	if (onic_ring_full(ring) || !netdev_xmit_more()) {
-#elif defined(RHEL_RELEASE_CODE) && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
+#elif defined(RHEL_RELEASE_CODE) 
+#if RHEL_RELElASE_CODE >= RHEL_RELEASE_VERSION(8, 1)
         if (onic_ring_full(ring) || !netdev_xmit_more()) {
+#endif
 #else
 	if (onic_ring_full(ring) || !skb->xmit_more) {
 #endif
