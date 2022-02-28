@@ -1,4 +1,4 @@
-# OpenNIC Driver
+# AMD OpenNIC Driver
 
 This is one of the two components of the
 [OpenNIC project](https://github.com/Xilinx/open-nic.git).  The other component is
