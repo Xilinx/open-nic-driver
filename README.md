@@ -1,8 +1,9 @@
 # AMD OpenNIC Driver
 
 This is one of the two components of the
-[OpenNIC project](https://github.com/Xilinx/open-nic.git).  The other component is
-[OpenNIC shell](https://github.com/Xilinx/open-nic-shell.git).
+[OpenNIC project](https://github.com/Xilinx/open-nic.git).  The other components are:
+- [OpenNIC shell](https://github.com/Xilinx/open-nic-shell.git) and
+- [OpenNIC DPDK](https://github.com/Xilinx/open-nic-dpdk.git).
 
 OpenNIC driver implements a Linux kernel driver for OpenNIC shell.  It supports
 multiple PCI-e PFs with multiple TX/RX queues in each PF, and up to two 100Gbps
