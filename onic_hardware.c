@@ -174,22 +174,7 @@ static void onic_qdma_init_csr(struct qdma_dev *qdev)
 	qdma_write_reg(qdev, offset, val);
 }
 
-static bool onic_rx_lane_aligned(struct onic_hardware *hw, u8 cmac_id)
-{
-	u32 offset = CMAC_OFFSET_STAT_RX_STATUS(cmac_id);
-	u32 val;
 
-	/* read twice to flush any previously latched value */
-	val = onic_read_reg(hw, offset);
-	val = onic_read_reg(hw, offset);
-	return (val == 0x3);
-}
-
-static void onic_disable_cmac(struct onic_hardware *hw, u8 cmac_id)
-{
-	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x0);
-	onic_write_reg(hw, CMAC_OFFSET_CONF_RX_1(cmac_id), 0x0);
-}
 
 static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 {
@@ -215,13 +200,7 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 	onic_write_reg(hw, CMAC_OFFSET_CONF_RX_1(cmac_id), 0x1);
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x10);
 
-	/* wait for lane alignment */
-	if (!onic_rx_lane_aligned(hw, cmac_id)) {
-		mdelay(RX_ALIGN_TIMEOUT_MS);
-		if (!onic_rx_lane_aligned(hw, cmac_id))
-			goto rx_not_aligned;
-	}
-
+	
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x1);
 
 	/* RX flow control */
@@ -242,10 +221,6 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_FC_CTRL_1(cmac_id), 0x000001FF);
 
 	return 0;
-
-rx_not_aligned:
-	onic_disable_cmac(hw, cmac_id);
-	return -EBUSY;
 }
 
 int onic_init_hardware(struct onic_private *priv)
