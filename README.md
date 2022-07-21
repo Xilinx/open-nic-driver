@@ -65,6 +65,32 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 2. Run `ping 192.168.1.10`.
 3. Observe that packets captured by `tcpdump` are always duplicated.
 
+### ETHTOOL Test
+
+ethtool is a built-in Linux desktool. This tool is used to control and read status of
+various MAC parameters. Also, this tool is used to obtain various counter registers
+(such as total good packets etc.) from the MAC.
+
+  If the tool is not found, install it from distro.
+    # sudo apt install ethtool
+
+  List all options that the tool can support
+    # ethtool -h
+
+  List active interfaces, activate required interface
+    # ifconfig -a
+    # ifconfig <interface> <ip address> up
+
+  Use ethtool interface to see the status
+    # ethtool <interface>
+
+  Show driver information
+    # ethtool -i <interface>
+
+  Show adapter statistics
+    # ethtool -S <interface>
+
+
 ## Known Issues
 
 ### Static IP Address
