@@ -10,8 +10,7 @@ multiple PCI-e PFs with multiple TX/RX queues in each PF, and up to two 100Gbps
 ports on the same card.  As of version 1.0, the driver has not implemented the
 ethtool routines to change the hash key and the indirection table.
 
-The driver has been tested on under Ubuntu 18.04 with Linux kernel version
-4.15.0 and 5.3.0.
+The driver has been tested on under Ubuntu 18.04, 20.04, and 22.04 with multiple versions of the Linux kernel.
 
 ## Building the Driver
 
