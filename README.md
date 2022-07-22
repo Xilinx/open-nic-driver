@@ -73,33 +73,45 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
 
   If the tool is not found, install it from distro.
 
+  ```
   $ sudo apt install ethtool
+  ```
 
   List all options that the tool can support
 
+  ```
   $ ethtool -h
+  ```
 
   List active interfaces, activate required interface
   Note: assume interface name is xyz01, IP address is 192.168.1.1
 
+  ```
   $ ifconfig -a
 
   $ ifconfig xyz01 192.168.1.1 up
+  ```
 
   Use ethtool interface to see the status
   Note: assume interface name is xyz01
 
+  ```
   $ ethtool xyz01
+  ```
 
   Show driver information
   Note: assume interface name is xyz01
 
+  ```
   $ ethtool -i xyz01
+  ```
 
   Show adapter statistics
   Note: assume interface name is xyz01
 
+  ```
   $ ethtool -S xyz01
+  ```
 
 
 ## Known Issues
@@ -115,9 +127,11 @@ Assigning a static network address seems to solve the issue in most cases.  Add
 the following lines into `/etc/network/interfaces` with the correct interface
 name, IP address.
 
+    ```
     auto IF_NAME
     iface IF_NAME inet static
           address IP_ADDRESS
+    ```
 
 An alternative is to uninstall DHCP.  This can be done by killing any running processes using DHCP with
 `ps -eF | grep dhclient`, and then to disable DHCP.
