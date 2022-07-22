@@ -67,7 +67,7 @@ is `enp216s0f0` and the IP address is `192.168.1.10`.
 
 ### ETHTOOL Test
 
-ethtool is a built-in Linux desktool. This tool is used to control and read status of
+`ethtool` is a Linux utility and used to control and read status of
 various MAC parameters. Also, this tool is used to obtain various counter registers
 (such as total good packets etc.) from the MAC.
 
