@@ -188,12 +188,12 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
     }
 
 	if (cmac_id == 0) {
-		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x2);
-		while ((onic_read_reg(hw, SYSCFG_OFFSET_SHELL_STATUS) & 0x2) != 0x2)
+		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x10);
+		while ((onic_read_reg(hw, SYSCFG_OFFSET_SHELL_STATUS) & 0x10) != 0x10)
 			mdelay(CMAC_RESET_WAIT_MS);
 	} else {
-		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x4);
-		while ((onic_read_reg(hw, SYSCFG_OFFSET_SHELL_STATUS) & 0x4) != 0x4)
+		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x100);
+		while ((onic_read_reg(hw, SYSCFG_OFFSET_SHELL_STATUS) & 0x100) != 0x100)
 			mdelay(CMAC_RESET_WAIT_MS);
 	}
 
