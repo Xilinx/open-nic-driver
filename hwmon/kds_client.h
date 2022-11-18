@@ -1,0 +1,107 @@
+/* SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 */
+/*
+ * Xilinx Kernel Driver Scheduler
+ *
+ * Copyright (C) 2021-2022 Xilinx, Inc. All rights reserved.
+ *
+ * Authors: min.ma@xilinx.com
+ *
+ * This file is dual-licensed; you may select either the GNU General Public
+ * License version 2 or Apache License, Version 2.0.
+ */
+
+#ifndef _KDS_CLIENT_H
+#define _KDS_CLIENT_H
+
+#include <linux/list.h>
+#include <linux/mutex.h>
+#include <linux/pid.h>
+#include <linux/device.h>
+#include <linux/uuid.h>
+
+#include "xrt_cu.h"
+#include "kds_stat.h"
+
+#define EV_ABORT	0x1
+
+/* Multiple xclbin context can be active under a single client.
+ * Client should maintain all the active XCLBIN.
+ */
+struct kds_client_ctx {
+	struct list_head          link;
+	void			 *xclbin_id;
+	u32			  slot_idx;
+	u32			  num_ctx;
+	u32			  num_scu_ctx;
+	u32			  virt_cu_ref;
+};
+
+struct kds_client_cu_refcnt {
+	struct mutex	          lock;
+	u32                       cu_refs[MAX_CUS];
+	u32                       scu_refs[MAX_CUS];
+};
+
+/**
+ * struct kds_client: Manage user client
+ * Whenever user applciation open the device, a client would be created.
+ * A client will keep alive util application close the device or being killed.
+ * The client could open multiple contexts to access compute resources.
+ *
+ * @link: Client is added to list in KDS scheduler
+ * @dev:  Device
+ * @pid:  Client process ID
+ * @lock: Mutex to protext context related members
+ * @xclbin_id: UUID of xclbin cache
+ * @num_ctx: Number of context that opened
+ * @num_scu_ctx: Number of soft kernel context that opened
+ * @virt_cu_ref: Reference count of virtual CU
+ * @cu_bitmap: bitmap of opening CU
+ * @scu_bitmap: bitmap of opening SCU
+ * @waitq: Wait queue for poll client
+ * @event: Events to notify user client
+ */
+struct kds_client {
+	struct list_head	  link;
+	struct device	         *dev;
+	struct pid	         *pid;
+	struct mutex		  lock;
+
+	/* TODO: xocl not suppot multiple xclbin context yet. */
+	struct kds_client_ctx    *ctx;
+	struct list_head          ctx_list;
+
+	struct list_head          graph_list;
+	spinlock_t                graph_list_lock;
+	u32                       aie_ctx;
+	struct kds_client_cu_refcnt  *refcnt;
+
+	/* Per client statistics. Use percpu variable for two reasons
+	 * 1. no lock is need while modifying these counters
+	 * 2. do not need to worry about cache false share
+	 */
+	struct client_stats __percpu *stats;
+
+	struct list_head	  ev_entry;
+	int			  ev_type;
+
+	/*
+	 * Below are modified when the other thread is completing commands.
+	 * In order to prevent false sharing, they need to be in different
+	 * cache lines.
+	 */
+	wait_queue_head_t	  waitq ____cacheline_aligned_in_smp;
+	atomic_t		  event;
+};
+
+/* Macros to operates client statistics */
+#define client_stat_read(client, field) \
+	stat_read((client)->stats, field)
+
+#define client_stat_inc(client, field) \
+	this_stat_inc((client)->stats, field)
+
+#define client_stat_dec(client, field) \
+	this_stat_dec((client)->stats, field)
+
+#endif

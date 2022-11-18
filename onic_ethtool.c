@@ -231,7 +231,6 @@ static void onic_get_drvinfo(struct net_device *netdev,
 {
 	struct onic_private *priv = netdev_priv(netdev);
 
-    netdev_err(netdev, "ethtool: onic_get_drvinfo \r\n");
 	strlcpy(drvinfo->driver, onic_drv_name, sizeof(drvinfo->driver));
 	strlcpy(drvinfo->version, onic_drv_ver,
 		sizeof(drvinfo->version));
@@ -250,11 +249,7 @@ static void onic_get_ethtool_stats(struct net_device *netdev,
 	u16 func_id;
     u32 off;
 
-    netdev_err(netdev, "ethtool: onic_get_ethtool_stats \r\n");
-
     func_id = PCI_FUNC(pdev->devfn);
-    netdev_err(netdev, "onic_get_statistics, pci_func=%d, array=%ld \r\n",
-	           func_id, ONIC_GLOBAL_STATS_LEN);
 
     // Note :
 	//   write 1 into REG_TICK (offset 0x2B0).
@@ -281,8 +276,6 @@ static void onic_get_strings(struct net_device *netdev, u32 stringset,
 	u8 *p = data;
 	int i;
 
-    netdev_err(netdev, "ethtool: onic_get_strings cnt=%ld \r\n",
-	           ONIC_GLOBAL_STATS_LEN);
     for (i = 0; i < ONIC_GLOBAL_STATS_LEN; i++) {
         memcpy(p, onic_gstrings_stats[i].stat_string,
             ETH_GSTRING_LEN);
@@ -292,7 +285,6 @@ static void onic_get_strings(struct net_device *netdev, u32 stringset,
 
 static int onic_get_sset_count(struct net_device *netdev, int sset)
 {
-    netdev_err(netdev, "ethtool: onic_get_sset_count \r\n");
     return ONIC_STATS_LEN;
 }
 
@@ -306,6 +298,5 @@ static const struct ethtool_ops onic_ethtool_ops = {
 
 void onic_set_ethtool_ops(struct net_device *netdev)
 {
-    netdev_err(netdev, "onic_set_ethtool_ops \r\n");
     netdev->ethtool_ops = &onic_ethtool_ops;
 }
