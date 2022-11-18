@@ -29,6 +29,8 @@
 #include "onic_common.h"
 #include "onic_netdev.h"
 
+#undef CMS_SUPPORT
+
 #ifndef ONIC_VF
 #define DRV_STR "OpenNIC Linux Kernel Driver"
 char onic_drv_name[] = "onic";
@@ -49,6 +51,11 @@ MODULE_VERSION(DRV_VER);
 static int RS_FEC_ENABLED=1;
 module_param(RS_FEC_ENABLED, int, 0644);
 
+#ifdef CMS_SUPPORT
+extern int xocl_init_xmc(void);
+extern void xocl_fini_xmc(void);
+extern struct onic_private *onic_priv;
+#endif
 
 static const struct pci_device_id onic_pci_tbl[] = {
 	/* Gen 3 PF */
@@ -142,6 +149,9 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct sockaddr saddr;
 	char dev_name[IFNAMSIZ];
 	int rv;
+#ifdef CMS_SUPPORT
+        static int xmc_init=0;
+#endif
 	/* int pci_using_dac; */
 
 	rv = pci_enable_device_mem(pdev);
@@ -239,6 +249,17 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	pci_set_drvdata(pdev, priv);
 	netif_carrier_off(netdev);
+
+#ifdef CMS_SUPPORT
+        /* Support CMS sensors (lm-sensors), refer: pg348 */
+        if(xmc_init == 0)
+        {
+            onic_priv = priv;
+            xocl_init_xmc();
+            xmc_init=1;
+        }
+#endif
+
 	return 0;
 
 clear_interrupt:
@@ -264,6 +285,9 @@ disable_device:
 static void onic_remove(struct pci_dev *pdev)
 {
 	struct onic_private *priv = pci_get_drvdata(pdev);
+#ifdef CMS_SUPPORT
+        static int xmc_remove=0;
+#endif
 
 	unregister_netdev(priv->netdev);
 
@@ -276,6 +300,15 @@ static void onic_remove(struct pci_dev *pdev)
 	pci_set_drvdata(pdev, NULL);
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
+
+#ifdef CMS_SUPPORT
+        /* Support XMC sensors (lm-sensors) */
+        if(xmc_remove == 0)
+        {
+            xocl_fini_xmc();
+            xmc_remove=1;
+        }
+#endif
 }
 
 /* static const struct pci_error_handlers qdma_err_handler = { */
