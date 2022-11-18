@@ -121,14 +121,15 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
   This installs 'sensors' application here: /usr/bin/sensors
   
   To enable lm-sensors framework support in open-nic
-  a. open onic_main.c in any text editor
-  b. search for the macro definition : CMS_SUPPORT
-  c. update this line as : #define CMS_SUPPORT
-  d. save file and exit editor
-  e. build the open-nic driver
+  a. checkout the ope-nic-driver, "lm-sensors" branch.
+  b. open onic_main.c in any text editor
+  c. search for the macro definition : CMS_SUPPORT
+  d. update this line as : #define CMS_SUPPORT
+  e. save file and exit editor
+  f. build the open-nic driver
      $ make clean
      $ make
-  f. This creates the kernel module : onic.ko
+  g. This creates the kernel module : onic.ko
   
   To test LM-SENSORS support in the open-nic
   a. ensure, the onic mcs with CMS support is loaded into the FPGA
