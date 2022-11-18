@@ -30,7 +30,7 @@ static inline void onic_write_reg(struct onic_hardware *hw, u32 offset, u32 val)
 }
 
 #define SHELL_START					0x0
-#define SHELL_END					0x10000
+#define SHELL_END					0x400000 /* include CMS register space, 0x320000 to 0x330000 */
 #define SHELL_MAXLEN					(SHELL_END - SHELL_START)
 
 /***** system config registers *****/
