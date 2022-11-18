@@ -121,14 +121,15 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
   This installs 'sensors' application here: /usr/bin/sensors
   
   To enable lm-sensors framework support in open-nic
-  a. open onic_main.c in any text editor
-  b. search for the macro definition definition : CMS_SUPPORT
-  c. update this line as : #define CMS_SUPPORT
-  d. save file and exit editor
-  e. build the open-nic driver
+  a. checkout the ope-nic-driver, "lm-sensors" branch.
+  b. open onic_main.c in any text editor
+  c. search for the macro definition : CMS_SUPPORT
+  d. update this line as : #define CMS_SUPPORT
+  e. save file and exit editor
+  f. build the open-nic driver
      $ make clean
      $ make
-  f. This creates the kernel module : onic.ko
+  g. This creates the kernel module : onic.ko
   
   To test LM-SENSORS support in the open-nic
   a. ensure, the onic mcs with CMS support is loaded into the FPGA
@@ -139,30 +140,50 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
      $ sensors
   
   d. The output looks as below:
-  $ sensors
-     sn1000-onic-isa-0000
-     Adapter: ISA adapter
+
+      $ sensors
+
+      sn1000-onic-isa-0000
+
+      Adapter: ISA adapter
+      
       12V PEX:         +12.22 V  (max = +12.22 V, avg = +12.21 V)
+      
       12V AUX:         +12.26 V  (max = +12.26 V, avg = +12.25 V)
+      
       3V3 PEX:          +3.26 V  (max =  +3.26 V, avg =  +3.26 V)
+      
       1V8 TOP:          +1.80 V  (max =  +1.80 V, avg =  +1.80 V)
+      
       VCC INT:          +0.85 V  (max =  +0.85 V, avg =  +0.85 V)
+      
       VCC 3V3:          +3.27 V  (max =  +3.27 V, avg =  +3.27 V)
+      
       PCB TOP FRONT:    +44.0°C  (highest = +45.0°C)
+      
       PCB TOP REAR:     +47.0°C  (highest = +48.0°C)
+      
       FPGA TEMP:        +58.0°C  (highest = +59.0°C)
+      
       QSPF 0:            +0.0°C  (highest =  +0.0°C)
+      
       QSPF 1:            +0.0°C  (highest =  +0.0°C)
+      
       POWER:            38.66 W  (avg =  40.42 W)
+      
       12V PEX Current:  +2.07 A  (max =  +2.15 A, avg =  +2.08 A)
+      
       12V AUX Current:  +0.76 A  (max =  +0.81 A, avg =  +0.75 A)
+      
       VCC INT Current: +10.00 A  (max = +10.60 A, avg = +10.00 A)
+      
       3V3 PEX Current:  +1.24 A  (max =  +1.29 A, avg =  +1.24 A)
 
       ... ... ...
       sensor output for other devices
       ... ... ...
       ... ... ...
+
 
 ## Known Issues
 
