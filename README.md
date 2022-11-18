@@ -133,11 +133,9 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
      
      a, Load the kernel driver as explained above
 
-     b. run the sensors application, to see the data
-     
-        $ sensors
-  
-     c. The output looks as below:
+     b. Run the sensors application, to see the data
+        
+        The output looks as below:
 
         $ sensors
 
