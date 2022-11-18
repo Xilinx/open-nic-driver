@@ -140,9 +140,13 @@ various MAC parameters. Also, this tool is used to obtain various counter regist
      $ sensors
   
   d. The output looks as below:
-  $ sensors
-     sn1000-onic-isa-0000
-     Adapter: ISA adapter
+
+      $ sensors
+
+      sn1000-onic-isa-0000
+
+      Adapter: ISA adapter
+      
       12V PEX:         +12.22 V  (max = +12.22 V, avg = +12.21 V)
       
       12V AUX:         +12.26 V  (max = +12.26 V, avg = +12.25 V)
