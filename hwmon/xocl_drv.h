@@ -61,8 +61,13 @@
 #include "xocl_ioctl.h"
 #include "mgmt-ioctl.h"
 #include "mailbox_proto.h"
+<<<<<<< HEAD
+//sn1000 #include <linux/libfdt_env.h>
+//sn1000 #include "lib/libfdt/libfdt.h"
+=======
 //srini #include <linux/libfdt_env.h>
 //srini #include "lib/libfdt/libfdt.h"
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 #include <linux/firmware.h>
 #include "kds_core.h"
 #include "xclerr_int.h"
@@ -2496,7 +2501,11 @@ static inline void xocl_drvinst_free(void *hdl) {
 }
 void *xocl_drvinst_open(void *file_dev);
 void *xocl_drvinst_open_single(void *file_dev);
+<<<<<<< HEAD
+//sn1000 void xocl_drvinst_close(void *data);
+=======
 //srini void xocl_drvinst_close(void *data);
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 void xocl_drvinst_set_filedev(void *data, void *file_dev);
 void xocl_drvinst_offline(xdev_handle_t xdev_hdl, bool offline);
 int xocl_drvinst_set_offline(void *data, bool offline);
@@ -2614,8 +2623,13 @@ void xocl_fini_mig(void);
 int __init xocl_init_ert(void);
 void xocl_fini_ert(void);
 
+<<<<<<< HEAD
+//sn1000 int __init xocl_init_xmc(void);
+//sn1000 void xocl_fini_xmc(void);
+=======
 //srini int __init xocl_init_xmc(void);
 //srini void xocl_fini_xmc(void);
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 
 int __init xocl_init_xmc_u2(void);
 void xocl_fini_xmc_u2(void);

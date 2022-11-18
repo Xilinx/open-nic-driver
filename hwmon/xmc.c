@@ -697,8 +697,11 @@ static void safe_read32(struct xocl_xmc *xmc, u32 reg, u32 *val)
 	if (xmc->enabled && xmc->state == XMC_STATE_ENABLED)
 	{
 		*val = READ_REG32(xmc, reg);
+<<<<<<< HEAD
+=======
 		printk(KERN_ERR "    safe_read32: 0x%llx : 0x%x : 0x%x \r\n", 
 			(unsigned long long) (xmc->base_addrs[IO_REG]), reg, *val);
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 	}
 	else
 		*val = 0;
@@ -711,8 +714,11 @@ static void safe_write32(struct xocl_xmc *xmc, u32 reg, u32 val)
 	if (xmc->enabled && xmc->state == XMC_STATE_ENABLED)
 	{
 		WRITE_REG32(xmc, val, reg);
+<<<<<<< HEAD
+=======
 		printk(KERN_ERR "    safe_read32: 0x%llx : 0x%x : 0x%x \r\n", 
 			(unsigned long long) (xmc->base_addrs[IO_REG]), reg, val);
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 	}
 	mutex_unlock(&xmc->xmc_lock);
 }
@@ -4422,8 +4428,13 @@ int xmc_probe(struct platform_device *pdev)
 
 	for (i = 0; i < NUM_IOADDR; i++) {
 		xmc->base_addrs[i] = (void __iomem *) (onic_priv->hw.addr + 0x328000);
+<<<<<<< HEAD
+		//xocl_err(&pdev->dev, "    xmc_probe: xmc->base_addrs[%d] = 0x%llx \r\n",  
+		//		i, (unsigned long long) (xmc->base_addrs[i]) );
+=======
 		xocl_err(&pdev->dev, "    xmc_probe: xmc->base_addrs[%d] = 0x%llx \r\n",  
 				i, (unsigned long long) (xmc->base_addrs[i]) );
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 
         #ifdef XMC_XRT
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i);

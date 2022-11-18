@@ -253,8 +253,14 @@ void xocl_debug_fini(void)
 	if (xrt_debug.buffer)
 		vfree(xrt_debug.buffer);
 
+<<<<<<< HEAD
+	/* no need for sn1000 */
+	//if (xrt_debug.debugfs_root)
+	//	debugfs_remove_recursive(xrt_debug.debugfs_root);
+=======
 	//srini if (xrt_debug.debugfs_root)
 	//srini 	debugfs_remove_recursive(xrt_debug.debugfs_root);
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 
 	mutex_destroy(&xrt_debug.mod_lock);
 }
@@ -276,7 +282,11 @@ int xocl_debug_init(void)
 	xrt_debug.last_char = xrt_debug.buffer;
 	xrt_debug.read_all = true;
 
+<<<<<<< HEAD
+        #if 0 /* sn1000 */
+=======
         #if 0 //srini
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 	xrt_debug.debugfs_root = debugfs_create_dir(KBUILD_MODNAME, NULL);
 	if (IS_ERR(xrt_debug.debugfs_root)) {
 		pr_info("creating debugfs root failed");
@@ -287,7 +297,12 @@ int xocl_debug_init(void)
 			    xrt_debug.debugfs_root, NULL, &trace_fops);
 	debugfs_create_file(XOCL_DFS_TRACE_MOD, 0644,
 			    xrt_debug.debugfs_root, NULL, &trace_mod_fops);
+<<<<<<< HEAD
+        #endif /* sn1000 */
+
+=======
         #endif //srini
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 	spin_lock_init(&xrt_debug.trace_lock);
 	init_waitqueue_head(&xrt_debug.trace_wq);
 	INIT_LIST_HEAD(&xrt_debug.mod_list);

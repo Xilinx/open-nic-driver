@@ -35,7 +35,11 @@
 #ifndef	_XCL_DEVICES_H_
 #define	_XCL_DEVICES_H_
 
+<<<<<<< HEAD
+//sn1000 #include <ert.h>
+=======
 //srini #include <ert.h>
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 #include "xocl_fdt.h"
 /* board flags */
 enum {
@@ -210,7 +214,11 @@ enum {
 
 #define	MGMTPF		0
 #define	USERPF		1
+<<<<<<< HEAD
+#define PF MGMTPF /* sn1000 */
+=======
 #define PF MGMTPF // srini
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 
 #if PF == MGMTPF
 #define SUBDEV_SUFFIX	".m"

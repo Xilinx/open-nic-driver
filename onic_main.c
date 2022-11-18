@@ -29,7 +29,11 @@
 #include "onic_common.h"
 #include "onic_netdev.h"
 
+<<<<<<< HEAD
+#undef CMS_SUPPORT    /* supported in sn1000 onic */
+=======
 #undef CMS_SUPPORT
+>>>>>>> 88a2a1714c6b9b4b257f4c7440c81f4c2332eb52
 
 #ifndef ONIC_VF
 #define DRV_STR "OpenNIC Linux Kernel Driver"
