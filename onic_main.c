@@ -29,7 +29,7 @@
 #include "onic_common.h"
 #include "onic_netdev.h"
 
-#undef CMS_SUPPORT    /* supported in sn1000 onic, Need cms IP support in the design */
+#undef CMS_SUPPORT    /* Need CMS IP in the design @320000 offset */
 
 #ifndef ONIC_VF
 #define DRV_STR "OpenNIC Linux Kernel Driver"
