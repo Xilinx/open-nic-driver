@@ -4393,7 +4393,7 @@ int xmc_probe(struct platform_device *pdev)
 	#endif
 	int i, err = 0;
 
-	/* clear CMS reset. Refer pg348-cms-subsystem.pdf, SN1000_readme.pdf */
+	/* clear CMS reset. Refer pg348-cms-subsystem.pdf */
 	if(onic_priv->hw.addr == 0) {
 		xocl_err(&pdev->dev, "hw address is not set \r\n");
 	} else {
