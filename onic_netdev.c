@@ -752,7 +752,7 @@ int onic_set_mac_address(struct net_device *dev, void *addr)
 	netdev_info(dev, "Set MAC address to %02x:%02x:%02x:%02x:%02x:%02x",
 			dev_addr[0], dev_addr[1], dev_addr[2],
 			dev_addr[3], dev_addr[4], dev_addr[5]);
-	memcpy(dev->dev_addr, dev_addr, dev->addr_len);
+	memcpy((char *)dev->dev_addr, dev_addr, dev->addr_len);
 	return 0;
 }
 
