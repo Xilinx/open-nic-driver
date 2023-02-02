@@ -238,32 +238,54 @@ static void onic_get_drvinfo(struct net_device *netdev,
 		sizeof(drvinfo->bus_info));
 }
 
+static u32 onic_get_link(struct net_device *netdev)
+{
+    u32 val, carrier_ok;
+    u8 cmac_idx;
+    struct onic_private *priv = netdev_priv(netdev);
+    struct onic_hardware *hw = &priv->hw;
+
+    cmac_idx = test_bit(ONIC_FLAG_MASTER_PF, priv->flags) ? 0 : 1;
+
+    /* read twice to flush any previously latched value */
+    val = onic_read_reg(hw, CMAC_OFFSET_STAT_RX_STATUS(cmac_idx));
+    val = onic_read_reg(hw, CMAC_OFFSET_STAT_RX_STATUS(cmac_idx));
+
+    carrier_ok = netif_carrier_ok(netdev);
+    /* verify RX status reg bits are 0x3*/
+    val = (val == 0x3);
+    
+    netdev_info(netdev, "ethtool: onic_get_link port: %d   carrier ok: %u -- "
+		    "rx status ok: %u\r\n", cmac_idx, carrier_ok, val);
+
+    return (carrier_ok && val);
+}
+
 static void onic_get_ethtool_stats(struct net_device *netdev,
             struct ethtool_stats /*__always_unused*/ *stats,
             u64 *data)
 {
     struct onic_private *priv = netdev_priv(netdev);
     struct onic_hardware *hw = &priv->hw;
-	struct pci_dev *pdev = priv->pdev;
+    struct pci_dev *pdev = priv->pdev;
     int i;
-	u16 func_id;
+    u16 func_id;
     u32 off;
 
     func_id = PCI_FUNC(pdev->devfn);
 
     // Note :
-	//   write 1 into REG_TICK (offset 0x2B0).
+    //   write 1 into REG_TICK (offset 0x2B0).
     //   this is WriteOnce/SelfClear (WO/SC).
     //   with this, the cmac system updates all STAT_* registers.
-	if(func_id==0)
+    if (func_id == 0)
          onic_write_reg(hw, CMAC_OFFSET_TICK(0), 1);
-	else onic_write_reg(hw, CMAC_OFFSET_TICK(1), 1);
+    else onic_write_reg(hw, CMAC_OFFSET_TICK(1), 1);
 
-    for(i=0; i<ONIC_GLOBAL_STATS_LEN; i++)
-    {
-		if(func_id==0)
-              off = onic_gstrings_stats[i].stat0_offset;
-		 else off = onic_gstrings_stats[i].stat1_offset;
+    for (i = 0; i < ONIC_GLOBAL_STATS_LEN; i++) {
+        if (func_id == 0)
+          off = onic_gstrings_stats[i].stat0_offset;
+        else off = onic_gstrings_stats[i].stat1_offset;
         data[i] = onic_read_reg(hw,off);
     }
 
@@ -290,7 +312,7 @@ static int onic_get_sset_count(struct net_device *netdev, int sset)
 
 static const struct ethtool_ops onic_ethtool_ops = {
     .get_drvinfo       = onic_get_drvinfo,
-    .get_link          = ethtool_op_get_link,
+    .get_link          = onic_get_link,
     .get_ethtool_stats = onic_get_ethtool_stats,
     .get_strings       = onic_get_strings,
     .get_sset_count    = onic_get_sset_count,
