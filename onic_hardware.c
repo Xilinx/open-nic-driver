@@ -14,6 +14,7 @@
  * The full GNU General Public License is included in this distribution in
  * the file called "COPYING".
  */
+#include <linux/delay.h>
 #include <linux/pci.h>
 
 #include "onic_hardware.h"
@@ -38,7 +39,7 @@
 #define DEFAULT_THROT_EN_REQ			0
 #define DEFAULT_H2C_THROT_REQ_THRES		0x60
 
-#define RX_ALIGN_TIMEOUT_MS			100
+#define RX_ALIGN_TIMEOUT_MS			1000
 #define CMAC_RESET_WAIT_MS			1
 
 static const u16 rngcnt_pool[QDMA_NUM_DESC_RNGCNT] = {
@@ -174,18 +175,37 @@ static void onic_qdma_init_csr(struct qdma_dev *qdev)
 	qdma_write_reg(qdev, offset, val);
 }
 
+static bool onic_rx_lane_aligned(struct onic_hardware *hw, u8 cmac_id)
+{
+	struct onic_private *priv = container_of(hw, struct onic_private, hw);
+	struct pci_dev *pdev = priv->pdev;
+	
+	u32 offset = CMAC_OFFSET_STAT_RX_STATUS(cmac_id);
+	u32 val;
 
+	/* read twice to flush any previously latched value */
+	val = onic_read_reg(hw, offset);
+	val = onic_read_reg(hw, offset);
+	
+	dev_info(&pdev->dev, "CMAC %d RX_STATUS_REG value: 0x%08X", 
+			 (int)cmac_id, val);
+	
+	return (val == 0x3);
+}
+
+static void onic_disable_cmac(struct onic_hardware *hw, u8 cmac_id)
+{
+	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x0);
+	onic_write_reg(hw, CMAC_OFFSET_CONF_RX_1(cmac_id), 0x0);
+}
 
 static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 {
+	struct onic_private *priv = container_of(hw, struct onic_private, hw);
+	struct pci_dev *pdev = priv->pdev;
+	
 	if (cmac_id != 0 && cmac_id != 1)
 		return -EINVAL;
-
-    if (hw->RS_FEC) {
-	/* Enable RS-FEC for CMACs with RS-FEC implemented */
-	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
-	onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
-    }
 
 	if (cmac_id == 0) {
 		onic_write_reg(hw, SYSCFG_OFFSET_SHELL_RESET, 0x10);
@@ -197,10 +217,22 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 			mdelay(CMAC_RESET_WAIT_MS);
 	}
 
+    if (hw->RS_FEC) {
+		/* Enable RS-FEC for CMACs with RS-FEC implemented */
+		onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_ENABLE(cmac_id), 0x3);
+		onic_write_reg(hw, CMAC_OFFSET_RSFEC_CONF_IND_CORRECTION(cmac_id), 0x7);
+    }
+
 	onic_write_reg(hw, CMAC_OFFSET_CONF_RX_1(cmac_id), 0x1);
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x10);
 
-	
+	/* Wait for lane alignment */
+	if (!onic_rx_lane_aligned(hw, cmac_id)) {
+		mdelay(RX_ALIGN_TIMEOUT_MS);
+		if (!onic_rx_lane_aligned(hw, cmac_id))
+			goto rx_not_aligned;
+	}
+
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_1(cmac_id), 0x1);
 
 	/* RX flow control */
@@ -221,6 +253,11 @@ static int onic_enable_cmac(struct onic_hardware *hw, u8 cmac_id)
 	onic_write_reg(hw, CMAC_OFFSET_CONF_TX_FC_CTRL_1(cmac_id), 0x000001FF);
 
 	return 0;
+
+rx_not_aligned:
+	dev_err(&pdev->dev, "CMAC %d RX not aligned after waiting", (int)cmac_id);
+	onic_disable_cmac(hw, cmac_id);
+	return -EBUSY;
 }
 
 int onic_init_hardware(struct onic_private *priv)
@@ -234,7 +271,7 @@ int onic_init_hardware(struct onic_private *priv)
 	u8 master_pf = test_bit(ONIC_FLAG_MASTER_PF, priv->flags);
 	int i, rv;
 
-        priv->hw.RS_FEC = priv->RS_FEC;
+    priv->hw.RS_FEC = priv->RS_FEC;
 
 	/* shell registers uses BAR-2 */
 	hw->addr = pci_iomap_range(pdev, 2, SHELL_START, SHELL_MAXLEN);
@@ -277,7 +314,7 @@ int onic_init_hardware(struct onic_private *priv)
 	if (master_pf)
 		onic_qdma_init_csr(qdev);
 
-        hw->qdma = (unsigned long)qdev;
+    hw->qdma = (unsigned long)qdev;
 
 	/* get the number of CMAC instances */
 	for (i = 0; i < ONIC_MAX_CMACS; ++i) {

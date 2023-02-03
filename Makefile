@@ -13,7 +13,13 @@
 # 
 # The full GNU General Public License is included in this distribution in
 # the file called "COPYING".
-# 
+#
+ifdef KVERSION
+KERNEL_VERS = $(KVERSION)
+else
+KERNEL_VERS = $(shell uname -r)
+endif
+
 srcdir = $(PWD)
 obj-m += onic.o
 BASE_OBJS := $(patsubst $(srcdir)/%.c,%.o,$(wildcard $(srcdir)/*.c $(srcdir)/*/*.c $(srcdir)/*/*/*.c))
@@ -22,7 +28,17 @@ ccflags-y = -O3 -Wall -Werror -I$(srcdir)/qdma_access -I$(srcdir)
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+	
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 	rm -f *.o.ur-safe
 	rm -f ./qdma_access/*.o.ur-safe
+
+install:
+	rm -f /lib/modules/$(KERNEL_VERS)/onic.ko
+	cp onic.ko /lib/modules/$(KERNEL_VERS)
+	depmod
+
+uninstall:
+	rm -f /lib/modules/$(KERNEL_VERS)/onic.ko
+	depmod
