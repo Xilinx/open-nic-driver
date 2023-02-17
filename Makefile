@@ -24,7 +24,7 @@ srcdir = $(PWD)
 obj-m += onic.o
 BASE_OBJS := $(patsubst $(srcdir)/%.c,%.o,$(wildcard $(srcdir)/*.c $(srcdir)/*/*.c $(srcdir)/*/*/*.c))
 onic-objs = $(BASE_OBJS)
-ccflags-y = -O3 -Wall -Werror -I$(srcdir)/qdma_access -I$(srcdir)
+ccflags-y = -O3 -Wall -Werror -I$(srcdir)/qdma_access -I$(srcdir)/hwmon -I$(srcdir)
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
