@@ -577,6 +577,7 @@ static ssize_t xmc_qsfp_io_write(struct xocl_xmc *xmc, int port, char *buffer,
 #endif
 
 struct onic_private *onic_priv;
+static char profile_name[50] = {0};
 
 #ifdef XMC_OPENNIC
 xdev_handle_t xocl_get_xdev(struct platform_device *pdev)
@@ -2681,7 +2682,7 @@ static ssize_t reg_base_show(struct device *dev,
 	xdev_handle_t xdev = xocl_get_xdev(xmc->pdev);
 	struct resource *res;
 	int ret, bar_idx;
-	resource_size_t bar_off;
+	resource_size_t bar_off = 0;
 
 	res = platform_get_resource(to_platform_device(dev), IORESOURCE_MEM, 0);
 	if (!res)
@@ -3415,11 +3416,17 @@ static ssize_t show_hwmon_name(struct device *dev, struct device_attribute *da,
 	int n;
 
     #ifdef XMC_XRT
-	xocl_get_raw_header(xdev_hdl, &rom);
-	n = snprintf(nm, sizeof(nm), "%s", rom.VBNVName);
+	  xocl_get_raw_header(xdev_hdl, &rom);
+	  n = snprintf(nm, sizeof(nm), "%s", rom.VBNVName);
+
     #else
-	n = snprintf(nm, sizeof(nm), "%s", "sn1000-onic");
+	  
+      if(profile_name[0] == '\0')
+	  	n = snprintf(nm, sizeof(nm), "%s", "noname_onic");   // default
+      else
+	  	n = snprintf(nm, sizeof(nm), "%s_onic", profile_name);
     #endif
+
 
     #ifdef XMC_XRT
 	if (XMC_PRIVILEGED(xmc))
@@ -4391,19 +4398,21 @@ int xmc_probe(struct platform_device *pdev)
 	struct resource *res;
 	xdev_handle_t xdev = xocl_get_xdev(pdev);
 	#endif
+	volatile uint32_t dat, iter;
 	int i, err = 0;
 
 	/* clear CMS reset. Refer pg348-cms-subsystem.pdf */
 	if(onic_priv->hw.addr == 0) {
 		xocl_err(&pdev->dev, "hw address is not set \r\n");
 	} else {
-        XOCL_WRITE_REG32(0x1, (void __iomem *) (onic_priv->hw.addr + 0x320000) );
-		msleep(5);
-		err = XOCL_READ_REG32( (void __iomem *) (onic_priv->hw.addr + 0x320000) );
-		xocl_err(&pdev->dev, "  CMS reset : 0x%x \r\n", err);
+            XOCL_WRITE_REG32(0x1, (void __iomem *) (onic_priv->hw.addr + 0x320000) );
+            wmb();
+            msleep(50);
+            err = XOCL_READ_REG32( (void __iomem *) (onic_priv->hw.addr + 0x320000) );
+            xocl_err(&pdev->dev, "clear CMS reset : 0x%x \r\n", err);
 	}
 
-    xmc = xocl_drvinst_alloc(&pdev->dev, sizeof(*xmc));
+        xmc = xocl_drvinst_alloc(&pdev->dev, sizeof(*xmc));
 	if (!xmc) {
 		xocl_err(&pdev->dev, "out of memory");
 		return -ENOMEM;
@@ -4555,6 +4564,90 @@ int xmc_probe(struct platform_device *pdev)
 		goto failed;
 	}
 	xmc->sysfs_created = true;
+
+    /*****************************************************/
+    // PERFORM FEW CHECKS BEFORE PROCEED
+
+        // check HOST_STATUS2_REG (0x030c) for Ready status
+	// wait few seconds
+	for(iter=0; ;)
+	{
+            dat = READ_REG32(xmc, XMC_STATUS2_REG);
+	    if( (dat & 0x1) == 1) {
+	        xocl_err(&pdev->dev, "CMS is Ready");
+		break;
+	    }
+            mdelay(200);
+	    iter++;
+	    if(iter > 10) {
+	        xocl_err(&pdev->dev, "CMS is not Ready");
+		break;
+	    }
+	}
+
+        // check REG_MAP_ID_REG (0x0000) == 0x74736574 (ascii 'tset')
+        dat = READ_REG32(xmc, XMC_MAGIC_REG);
+        if( dat != 0x74736574) {
+            xocl_err(&pdev->dev, "XMC magic id mismatch : 0x%x", dat);
+            goto failed;
+        }
+        xocl_err(&pdev->dev, "XMC magic id : 0x%x", dat);
+
+        // check CORE_BUILD_VERSION_REG (0x0c4c)
+        //dat = READ_REG32(xmc, XMC_CORE_VERSION_REG);
+        //xocl_err(&pdev->dev, "XMC core version : 0x%x", dat);
+
+        // check OEM_ID_REG (0xc50)
+        //dat = READ_REG32(xmc, XMC_OEM_ID_REG);
+        //xocl_err(&pdev->dev, "XMC OEM Id : 0x%x", dat);
+
+        // check FW_VERSION_REG (0x0004) as per model
+        //  CMS Firmware Version  Alveo Card  SC FW Version
+        //  --------------------  ----------  -------------
+        //  1.2.24  (0x0C010218)  U200/U250   4.6.21
+        //  1.3.5   (0x0C010305)  U280        4.3.28
+        //  1.0.41  (0x0C010029)  U50         5.2.20
+        //  1.5.26  (0x0C01051A)  U55         7.1.22
+        //  1.9.13  (0x0C01090D)  SN1000      3.0.23
+        //  1.10.18 (0x0C010A12)  X3522       3.0.23
+        //  1.5.26  (0x0C01051A)  Next-gen    7.1.22
+        //dat = READ_REG32(xmc, XMC_VERSION_REG);
+        //xocl_err(&pdev->dev, "XMC Version : 0x%x", dat);
+
+        // check STATUS_REG (0x0008) SC mode is Normal (0x1)
+        //dat = READ_REG32(xmc, XMC_STATUS_REG);
+        //if( (dat & 0x1) != 0x1) {
+        //    xocl_err(&pdev->dev, "XMC SC mode mismatch");
+        //    goto failed;
+        //}
+
+        // check ERROR_REG (0x000c) has Error, if so clear CONTROL_REG (0x0018)
+        //dat = READ_REG32(xmc, XMC_ERROR_REG);
+        //if( (dat & 0x08000000) != 0) {
+        //    WRITE_REG32(xmc, 0x2, XMC_CONTROL_REG);
+        //    mdelay(10);
+        //    dat = READ_REG32(xmc, XMC_ERROR_REG);
+        //    if( (dat & 0x08000000) != 0) {
+        //        xocl_err(&pdev->dev, "XMC error not clear, unload driver");
+        //        goto failed;
+        //    }
+        //}
+
+        // check PROFILE_NAME_REG (0x0014) for model
+        dat = READ_REG32(xmc, XMC_SENSOR_REG);
+        xocl_err(&pdev->dev, "XMC Profile : 0x%x", dat);
+	//memset(profile_name, 0, sizeof(profile_name) );
+        switch(dat)
+        {
+            case 0x55325858: strcpy(profile_name, "u200/u250");   break;
+            case 0x55323830: strcpy(profile_name, "u280");        break;
+            case 0x55353041: strcpy(profile_name, "u250");        break;
+            case 0x5535354E: strcpy(profile_name, "u55/nextgen"); break;
+            case 0x55323641: strcpy(profile_name, "sn1000");      break;
+            case 0x58334100: strcpy(profile_name, "x3522");       break;
+            default:         strcpy(profile_name, "noname");      break;
+        }
+    /****************************************************/
 
 	return 0;
 
