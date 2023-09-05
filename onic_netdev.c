@@ -553,7 +553,11 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	ring->next_to_clean = 0;
 	ring->color = 1;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	netif_napi_add(dev, &q->napi, onic_rx_poll);
+#else
 	netif_napi_add(dev, &q->napi, onic_rx_poll, 64);
+#endif
 	napi_enable(&q->napi);
 
 	/* initialize QDMA C2H queue */
