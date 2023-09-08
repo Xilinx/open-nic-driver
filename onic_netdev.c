@@ -125,7 +125,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	bool napi_cmpl_rval = 0;
 	bool flipped = 0;
 	bool debug = 0;
-	u8 arm_irq = 0;
 
 	for (i = 0; i < priv->num_tx_queues; i++)
 		onic_tx_clean(priv->tx_queue[i]);
@@ -277,7 +276,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 				cmpl_stat.pidx, work, budget,
 				napi_cmpl_rval ? "true" : "false");
 		napi_cmpl_rval = napi_complete_done(napi, work);
-		arm_irq = napi_cmpl_rval ? 1 : 0;
 		onic_set_completion_tail(priv->hw.qdma, qid,
 					 cmpl_ring->next_to_clean, 1);
 		if (debug)
@@ -295,7 +293,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 				    work, budget,
 				    napi_cmpl_rval ? "true" : "false");
 		napi_cmpl_rval = napi_complete_done(napi, work);
-		arm_irq = napi_cmpl_rval ? 1 : 0;
 		onic_set_completion_tail(priv->hw.qdma, qid,
 					 cmpl_ring->next_to_clean, 1);
 		if (debug)
@@ -686,7 +683,6 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	u8 *desc_ptr;
 	int rv;
 	bool debug = 0;
-	bool check_rv = 0;
 
 	q = priv->tx_queue[qid];
 	ring = &q->ring;
@@ -703,7 +699,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	rv = skb_put_padto(skb, ETH_ZLEN);
 
 	if (rv < 0)
-		check_rv = 1;
+		netdev_err(dev, "skb_put_padto failed, err = %d", rv);
 
 	dma_addr = dma_map_single(&priv->pdev->dev, skb->data, skb->len,
 				  DMA_TO_DEVICE);
@@ -756,7 +752,7 @@ int onic_set_mac_address(struct net_device *dev, void *addr)
 	netdev_info(dev, "Set MAC address to %02x:%02x:%02x:%02x:%02x:%02x",
 			dev_addr[0], dev_addr[1], dev_addr[2],
 			dev_addr[3], dev_addr[4], dev_addr[5]);
-	memcpy((char *)dev->dev_addr, dev_addr, dev->addr_len);
+	eth_hw_addr_set(dev, dev_addr);
 	return 0;
 }
 

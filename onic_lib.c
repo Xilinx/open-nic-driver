@@ -23,8 +23,6 @@
 
 extern int onic_poll(struct napi_struct *napi, int budget);
 
-static const enum qdma_intr_rngsz intr_rngsz = QDMA_INTR_RNGSZ_4KB;
-
 static irqreturn_t onic_q_handler(int irq, void *dev_id)
 {
 	struct onic_q_vector *vec = dev_id;
