@@ -49,4 +49,8 @@ void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats);
 
 int onic_poll(struct napi_struct *napi, int budget);
 
+int onic_xdp(struct net_device *dev, struct netdev_bpf *xdp);
+
+int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
+          u32 flags);
 #endif

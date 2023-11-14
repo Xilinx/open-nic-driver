@@ -19,6 +19,7 @@
 
 #include <linux/netdevice.h>
 #include <linux/cpumask.h>
+#include <linux/bpf.h>
 
 #include "onic_hardware.h"
 
@@ -31,8 +32,19 @@
 /* flag bits */
 #define ONIC_FLAG_MASTER_PF		0
 
+
+enum onic_tx_buf_type {
+	ONIC_TX_BUF_TYPE_SKB = 0,
+	ONIC_TX_BUF_TYPE_XDP,
+};
+
 struct onic_tx_buffer {
-	struct sk_buff *skb;
+	//struct sk_buff *skb; // TODO change this into a union with xdp_frame
+	enum igb_tx_buf_type type;
+	union {
+		struct sk_buff *skb;
+		struct xdp_frame *xdpf;
+	};
 	dma_addr_t dma_addr;
 	u32 len;
 	u64 time_stamp;
@@ -78,6 +90,8 @@ struct onic_rx_queue {
 	struct onic_q_vector *vector;
 
 	struct napi_struct napi;
+	struct bpf_prog *xdp_prog;
+	struct xdp_rxq_info xdp_rxq;
 };
 
 struct onic_q_vector {
@@ -104,6 +118,7 @@ struct onic_private {
 	u16 num_rx_queues;
 
 	struct net_device *netdev;
+	struct bpf_prog *xdp_prog;
 	struct rtnl_link_stats64 netdev_stats;
 	spinlock_t tx_lock;
 	spinlock_t rx_lock;
