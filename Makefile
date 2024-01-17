@@ -30,6 +30,9 @@ KDIR ?= /lib/modules/$(shell uname -r)/build
 
 all:
 	make -C $(KDIR) M=$(PWD) modules
+
+with-clang:
+	make CC=clang -C $(KDIR) M=$(PWD) modules
 	
 clean:
 	make -C $(KDIR) M=$(PWD) clean

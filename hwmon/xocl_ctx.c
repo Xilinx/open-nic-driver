@@ -183,7 +183,7 @@ int xocl_drvinst_set_offline(void *data, bool offline)
 failed:
 	mutex_unlock(&xocl_drvinst_lock);
 
-	return 0;
+	return ret;
 }
 
 int xocl_drvinst_get_offline(void *data, bool *offline)
