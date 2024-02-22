@@ -19,6 +19,7 @@
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
 #include <linux/bpf.h>
+#include <linux/filter.h>
 
 #include "onic_netdev.h"
 #include "qdma_access/qdma_register.h"
@@ -118,7 +119,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	struct onic_ring *cmpl_ring = &q->cmpl_ring;
 	struct qdma_c2h_cmpl cmpl;
 	struct qdma_c2h_cmpl_stat cmpl_stat;
-	struct xdp_buff xdp:
 	u8 *cmpl_ptr;
 	u8 *cmpl_stat_ptr;
 	u32 color_stat;
@@ -128,13 +128,16 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	bool flipped = 0;
 	bool debug = 0;
 
+	// TODO: commented to make it compile
+	// struct xdp_buff xdp;
+
 	// this has to be moved to the main loop but before the skb allocatiot
 	//  xdp.rxq = &q->xdp_rxq;
 	//  xdp.frame_sz = FRAME_SIZE; // i'm not sure this is correct, probably is pkt_len + some headers
 	//  xdp.data = data; // data is the pointer to the data in the page, and its being passed into the sk_buff struct
 	//  xdp.data_end = data + len; // data + len is the pointer to the end of the data in the page, and its being passed into the sk_buff struct
-	//  xdp.data_hard_start = data; 
-	//  xdp.data_meta = data; // 
+	//  xdp.data_hard_start = data;
+	//  xdp.data_meta = data; //
 
 	for (i = 0; i < priv->num_tx_queues; i++)
 		onic_tx_clean(priv->tx_queue[i]);
@@ -180,8 +183,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 
 	if (cmpl.err == 1) {
 		if (debug)
-			netdev_info(q->netdev,
-				    "completion error detected in cmpl entry!");
+			netdev_info(q->netdev, "completion error detected in cmpl entry!");
 		// todo: need to handle the error ...
 		onic_qdma_clear_error_interrupt(priv->hw.qdma);
 	}
@@ -201,18 +203,15 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 		/* maximum packet size is 1514, less than the page size */
 		data = (u8 *)(page_address(buf->pg) + buf->offset);
 		//data is the pointer to the data in the page, and its being passed into the sk_buff struct
-		
+
 		/* run here the XDP program
 		if XDP pass then continue normally
 		if XDP abort then drop the packet, which means skip the next block of code
 			which is the allocation of the skb, and jump to onic_ring_increment_tail(desc_ring)
-		if XDP_TX -> the frame is sent back out the same interface (how do i do this?) TODO	
+		if XDP_TX -> the frame is sent back out the same interface (how do i do this?) TODO
 		if XDP_REDIRECT -> the frame is sent out a different interface (how do i do this?) TODO
 		if XDP_DROP -> the frame is dropped & traced (how do i do this?) TODO
 		*/
-		
-
-
 
 		skb_put_data(skb, data, len);
 		skb->protocol = eth_type_trans(skb, q->netdev);
@@ -757,7 +756,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 	if (onic_ring_full(ring) || !netdev_xmit_more()) {
-#elif defined(RHEL_RELEASE_CODE) 
+#elif defined(RHEL_RELEASE_CODE)
 #if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1)
         if (onic_ring_full(ring) || !netdev_xmit_more()) {
 #endif
@@ -796,8 +795,7 @@ int onic_change_mtu(struct net_device *dev, int mtu)
 	return 0;
 }
 
-inline void onic_get_stats64(struct net_device *dev,
-			     struct rtnl_link_stats64 *stats)
+inline void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct onic_private *priv = netdev_priv(dev);
 
@@ -810,22 +808,9 @@ inline void onic_get_stats64(struct net_device *dev,
 }
 
 
-
-
-static int onic_xdp(struct net_device *dev, struct netdev_bpf *xdp) {
-
-	switch (xdp->command) {
-		case XDP_SETUP_PROG:
-			return onic_setup_xdp_prog(dev, xdp->prog);
-		default:
-			return -EINVAL;
-
-	}
-}
-
 static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
-
-	int i, frame_size = dev->mtu + ETH_HLEN + ETH_FCS_LEN ; // todo check if this is correct
+	// TODO: commented to make it compile
+	// int i, frame_size = dev->mtu + ETH_HLEN + ETH_FCS_LEN;
 
 	struct onic_private *priv = netdev_priv(dev);
 
@@ -837,7 +822,7 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 	//todo check for size (how do i do that?)
 
 	old_prog = xchg(&priv->xdp_prog, prog);
-	need_reset = (!!prog != !!old_prog)
+	need_reset = (!!prog != !!old_prog);
 
 	if (old_prog) {
 		bpf_prog_put(old_prog);
@@ -845,9 +830,9 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 	if (need_reset && running) {
 		onic_stop_netdev(dev);
 	} else {
-		
-		for(int i =0; i< priv->num_rx_queues; i++ ){
-			xchg(priv->rx_queue[i]->xdp_prog, priv-> xdp_prog);
+		int i;
+		for (i = 0; i < priv->num_rx_queues; i++) {
+			xchg(&priv->rx_queue[i]->xdp_prog, priv->xdp_prog);
 		}
 	}
 
@@ -859,21 +844,32 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 		return 0;
 
 	if (running)
-		igb_open(dev);
+		onic_open_netdev(dev);
 
 	return 0;
-	
 }
 
+int onic_xdp(struct net_device *dev, struct netdev_bpf *xdp) {
+	switch (xdp->command) {
+		case XDP_SETUP_PROG:
+			return onic_setup_xdp_prog(dev, xdp->prog);
+		default:
+			return -EINVAL;
+	}
+}
 
-static void *onic_run_xdp() {
+// TODO: commented to make it compile for now
+// static void *onic_run_xdp() {
+// 	struct bpf_prog *xdp_prog;
+// 	struct xdp_buff *xdp_buff;
+//
+// 	u32 act = bpf_prog_run_xdp(xdp_prog, xdp_buff);
+//
+// 	return NULL;
+// }
 
-	struct bpf_prog *xdp_prog;
-	struct xdp_buff *xdp_buff;
-	
-	u32 act ;
-
-	act = bpf_prog_run_xdp(xdp_prog, xdp_buff);
-  
+// TODO: stub
+int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 flags) {
+	return 0;
 }
 

@@ -40,7 +40,7 @@ enum onic_tx_buf_type {
 
 struct onic_tx_buffer {
 	//struct sk_buff *skb; // TODO change this into a union with xdp_frame
-	enum igb_tx_buf_type type;
+	enum onic_tx_buf_type type;
 	union {
 		struct sk_buff *skb;
 		struct xdp_frame *xdpf;
