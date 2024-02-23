@@ -20,6 +20,7 @@
 #include <linux/netdevice.h>
 #include <linux/cpumask.h>
 #include <linux/bpf.h>
+#include <linux/bitops.h>
 
 #include "onic_hardware.h"
 
@@ -32,6 +33,11 @@
 /* flag bits */
 #define ONIC_FLAG_MASTER_PF		0
 
+/* XDP */
+#define ONIC_XDP_PASS     BIT(0)
+#define ONIC_XDP_CONSUMED	BIT(0)
+#define ONIC_XDP_TX       BIT(1)
+#define ONIC_XDP_REDIR    BIT(2)
 
 enum onic_tx_buf_type {
 	ONIC_TX_BUF_TYPE_SKB = 0,
