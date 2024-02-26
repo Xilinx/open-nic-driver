@@ -122,9 +122,9 @@ int qdma_write_sw_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir,
 	cmd.bits.op = QDMA_CTXT_CMD_OP_WR;
 	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
 
-	desc_base_l = (u32)FIELD_GET(QDMA_SW_CTXT_DESC_BASE_GET_L_MASK,
+	desc_base_l = (u32)BITFIELD_GET(QDMA_SW_CTXT_DESC_BASE_GET_L_MASK,
 				     ctxt->desc_base);
-	desc_base_h = (u32)FIELD_GET(QDMA_SW_CTXT_DESC_BASE_GET_H_MASK,
+	desc_base_h = (u32)BITFIELD_GET(QDMA_SW_CTXT_DESC_BASE_GET_H_MASK,
 				     ctxt->desc_base);
 
 	data[num_words++] =
@@ -256,9 +256,9 @@ int qdma_write_pfch_ctxt(struct qdma_dev *qdev, u16 qid,
 	cmd.bits.op = QDMA_CTXT_CMD_OP_WR;
 	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
 
-	sw_crdt_l = (u32)FIELD_GET(QDMA_PFCH_CTXT_SW_CRDT_GET_L_MASK,
+	sw_crdt_l = (u32)BITFIELD_GET(QDMA_PFCH_CTXT_SW_CRDT_GET_L_MASK,
 				   ctxt->sw_crdt);
-	sw_crdt_h = (u32)FIELD_GET(QDMA_PFCH_CTXT_SW_CRDT_GET_H_MASK,
+	sw_crdt_h = (u32)BITFIELD_GET(QDMA_PFCH_CTXT_SW_CRDT_GET_H_MASK,
 				   ctxt->sw_crdt);
 
 	data[num_words++] =
@@ -316,13 +316,13 @@ int qdma_write_cmpl_ctxt(struct qdma_dev *qdev, u16 qid,
 	cmd.bits.op = QDMA_CTXT_CMD_OP_WR;
 	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
 
-	baddr_l = (u32)FIELD_GET(QDMA_CMPL_CTXT_BADDR_GET_L_MASK,
+	baddr_l = (u32)BITFIELD_GET(QDMA_CMPL_CTXT_BADDR_GET_L_MASK,
 				 ctxt->baddr);
-	baddr_h = (u32)FIELD_GET(QDMA_CMPL_CTXT_BADDR_GET_H_MASK,
+	baddr_h = (u32)BITFIELD_GET(QDMA_CMPL_CTXT_BADDR_GET_H_MASK,
 				 ctxt->baddr);
-	pidx_l = (u32)FIELD_GET(QDMA_CMPL_CTXT_PIDX_GET_L_MASK,
+	pidx_l = (u32)BITFIELD_GET(QDMA_CMPL_CTXT_PIDX_GET_L_MASK,
 				ctxt->pidx);
-	pidx_h = (u32)FIELD_GET(QDMA_CMPL_CTXT_PIDX_GET_H_MASK,
+	pidx_h = (u32)BITFIELD_GET(QDMA_CMPL_CTXT_PIDX_GET_H_MASK,
 				ctxt->pidx);
 
 	data[num_words++] =

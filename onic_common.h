@@ -61,7 +61,7 @@ static inline u8 get_trailing_zeros(u64 x)
 
 #define FIELD_SHIFT(mask)	get_trailing_zeros(mask)
 #define FIELD_SET(mask, val)	(((u64)(val) << FIELD_SHIFT(mask)) & mask)
-#define FIELD_GET(mask, reg)	((reg & mask) >> FIELD_SHIFT(mask))
+#define BITFIELD_GET(mask, reg)	((reg & mask) >> FIELD_SHIFT(mask))
 
 /**
  * print_raw_data - print raw data to kernel log

@@ -54,8 +54,8 @@ void qdma_unpack_wb_stat(struct qdma_wb_stat *stat, u8 *data)
 
 	dw = (u64 *)data;
 
-	stat->pidx = FIELD_GET(QDMA_WB_STAT_DW_PIDX_MASK, *dw);
-	stat->cidx = FIELD_GET(QDMA_WB_STAT_DW_CIDX_MASK, *dw);
+	stat->pidx = BITFIELD_GET(QDMA_WB_STAT_DW_PIDX_MASK, *dw);
+	stat->cidx = BITFIELD_GET(QDMA_WB_STAT_DW_CIDX_MASK, *dw);
 }
 
 void qdma_unpack_c2h_cmpl(struct qdma_c2h_cmpl *cmpl, u8 *data)
@@ -67,10 +67,10 @@ void qdma_unpack_c2h_cmpl(struct qdma_c2h_cmpl *cmpl, u8 *data)
 
 	dw = (u64 *)data;
 
-	cmpl->color = FIELD_GET(QDMA_C2H_CMPL_DW_COLOR_MASK, *dw);
-	cmpl->err = FIELD_GET(QDMA_C2H_CMPL_DW_ERR_MASK, *dw);
-	cmpl->pkt_len = FIELD_GET(QDMA_C2H_CMPL_DW_PKT_LEN_MASK, *dw);
-	cmpl->pkt_id = FIELD_GET(QDMA_C2H_CMPL_DW_PKT_ID_MASK, *dw);
+	cmpl->color = BITFIELD_GET(QDMA_C2H_CMPL_DW_COLOR_MASK, *dw);
+	cmpl->err = BITFIELD_GET(QDMA_C2H_CMPL_DW_ERR_MASK, *dw);
+	cmpl->pkt_len = BITFIELD_GET(QDMA_C2H_CMPL_DW_PKT_LEN_MASK, *dw);
+	cmpl->pkt_id = BITFIELD_GET(QDMA_C2H_CMPL_DW_PKT_ID_MASK, *dw);
 }
 
 void qdma_unpack_c2h_cmpl_stat(struct qdma_c2h_cmpl_stat *stat, u8 *data)
@@ -82,9 +82,9 @@ void qdma_unpack_c2h_cmpl_stat(struct qdma_c2h_cmpl_stat *stat, u8 *data)
 
 	dw = (u64 *)data;
 
-	stat->pidx = FIELD_GET(QDMA_C2H_CMPL_STAT_DW_PIDX_MASK, *dw);
-	stat->cidx = FIELD_GET(QDMA_C2H_CMPL_STAT_DW_CIDX_MASK, *dw);
-	stat->color = FIELD_GET(QDMA_C2H_CMPL_STAT_DW_COLOR_MASK, *dw);
+	stat->pidx = BITFIELD_GET(QDMA_C2H_CMPL_STAT_DW_PIDX_MASK, *dw);
+	stat->cidx = BITFIELD_GET(QDMA_C2H_CMPL_STAT_DW_CIDX_MASK, *dw);
+	stat->color = BITFIELD_GET(QDMA_C2H_CMPL_STAT_DW_COLOR_MASK, *dw);
 	stat->intr_state =
-		FIELD_GET(QDMA_C2H_CMPL_STAT_DW_INTR_STATE_MASK, *dw);
+		BITFIELD_GET(QDMA_C2H_CMPL_STAT_DW_INTR_STATE_MASK, *dw);
 }
