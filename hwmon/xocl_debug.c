@@ -67,7 +67,7 @@ static struct xocl_debug xrt_debug = {
 
 static unsigned long global_mod;
 
-static int trace_open(struct inode *inode, struct file *file)
+static inline int trace_open(struct inode *inode, struct file *file)
 {
 	spin_lock(&xrt_debug.trace_lock);
 	xrt_debug.overrun = 0;
@@ -79,12 +79,12 @@ static int trace_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int trace_release(struct inode *inode, struct file *file)
+static inline int trace_release(struct inode *inode, struct file *file)
 {
 	return 0;
 }
 
-static ssize_t trace_read(struct file *file, char __user *buf,
+static inline ssize_t trace_read(struct file *file, char __user *buf,
 			  size_t sz, loff_t *ppos)
 {
 	ssize_t count = 0;
@@ -140,15 +140,7 @@ out:
 	return count;
 }
 
-static const struct file_operations trace_fops = {
-	.owner = THIS_MODULE,
-	.open = trace_open,
-	.release = trace_release,
-	.read = trace_read,
-	.llseek = no_llseek,
-};
-
-static ssize_t trace_mod_read(struct file *file, char __user *buf,
+static inline ssize_t trace_mod_read(struct file *file, char __user *buf,
 			      size_t sz, loff_t *ppos)
 {
 	struct xrt_debug_mod *mod;
@@ -194,7 +186,7 @@ static ssize_t trace_mod_read(struct file *file, char __user *buf,
 }
 
 
-static ssize_t trace_mod_write(struct file *filp, const char __user *data,
+static inline ssize_t trace_mod_write(struct file *filp, const char __user *data,
 				size_t data_len, loff_t *ppos)
 {
 	struct xrt_debug_mod *mod = NULL, *_mod;
@@ -239,12 +231,6 @@ fail:
 	mutex_unlock(&xrt_debug.mod_lock);
 	return -EINVAL;
 }
-
-static const struct file_operations trace_mod_fops = {
-	.owner = THIS_MODULE,
-	.read = trace_mod_read,
-	.write = trace_mod_write,
-};
 
 void xocl_debug_fini(void)
 {

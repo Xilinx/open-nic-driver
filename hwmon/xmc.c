@@ -3413,18 +3413,17 @@ static ssize_t show_hwmon_name(struct device *dev, struct device_attribute *da,
 	struct xocl_xmc *xmc = dev_get_drvdata(dev);
 	#endif
 	char nm[150] = { 0 };
-	int n;
 
     #ifdef XMC_XRT
 	  xocl_get_raw_header(xdev_hdl, &rom);
-	  n = snprintf(nm, sizeof(nm), "%s", rom.VBNVName);
+	  snprintf(nm, sizeof(nm), "%s", rom.VBNVName);
 
     #else
 	  
       if(profile_name[0] == '\0')
-	  	n = snprintf(nm, sizeof(nm), "%s", "noname_onic");   // default
+	  	snprintf(nm, sizeof(nm), "%s", "noname_onic");   // default
       else
-	  	n = snprintf(nm, sizeof(nm), "%s_onic", profile_name);
+	  	snprintf(nm, sizeof(nm), "%s_onic", profile_name);
     #endif
 
 
@@ -3443,9 +3442,7 @@ static struct sensor_device_attribute name_attr =
 
 static void mgmt_sysfs_destroy_xmc_mini(struct platform_device *pdev)
 {
-	struct xocl_xmc *xmc;
-
-	xmc = platform_get_drvdata(pdev);
+	platform_get_drvdata(pdev);
 	sysfs_remove_group(&pdev->dev.kobj, &xmc_mini_attr_group);
 }
 
@@ -3488,11 +3485,13 @@ static void mgmt_sysfs_destroy_xmc(struct platform_device *pdev)
 static int mgmt_sysfs_create_xmc(struct platform_device *pdev)
 {
 	struct xocl_xmc *xmc;
-	struct xocl_dev_core *core;
 	int err;
+#ifdef XMC_XRT
+	struct xocl_dev_core *core;
+	core = XDEV(xocl_get_xdev(pdev));
+#endif
 
 	xmc = platform_get_drvdata(pdev);
-	core = XDEV(xocl_get_xdev(pdev));
 
 	if (!xmc->enabled)
 	{
@@ -4393,7 +4392,9 @@ static void inline xmc_enable_sensor_heartbeat(struct xocl_xmc *xmc)
 int xmc_probe(struct platform_device *pdev)
 {
 	struct xocl_xmc *xmc=0;
+#if defined(XMC_XRT) || defined(XMC_SCALE)
 	void *xdev_hdl;
+#endif
     #ifdef XMC_XRT
 	struct resource *res;
 	xdev_handle_t xdev = xocl_get_xdev(pdev);
@@ -4462,7 +4463,6 @@ int xmc_probe(struct platform_device *pdev)
 	}
 
 	xmc->priv_data = XOCL_GET_SUBDEV_PRIV(&pdev->dev);
-	xdev_hdl = xocl_get_xdev(pdev);
 
 	xmc->sc_presence = nosc_xmc(xmc->pdev) ? 0 : 1;
 
@@ -4476,6 +4476,7 @@ int xmc_probe(struct platform_device *pdev)
 		}
 
         #ifdef XMC_SCALE
+	  xdev_hdl = xocl_get_xdev(pdev);
 		if (xocl_clk_scale_on(xdev_hdl))
 			xmc->priv_data->flags |= XOCL_XMC_CLK_SCALING;
 		if (xocl_cmc_in_bitfile(xdev_hdl))
@@ -4502,8 +4503,9 @@ int xmc_probe(struct platform_device *pdev)
 			xmc_enable_mailbox(xmc);
 			#endif
 
+		}
         #ifdef XMC_MAILBOX
-		} else if (!xmc->base_addrs[IO_GPIO]) {
+    else if (!xmc->base_addrs[IO_GPIO]) {
 			xocl_info(&pdev->dev, "minimum mode for SC upgrade");
 			/* CMC is always enabled on golden image. */
 			xmc->enabled = true;
@@ -4512,7 +4514,6 @@ int xmc_probe(struct platform_device *pdev)
 			return 0;
 		}
 		#endif
-	}
 
     #ifdef XMC_XRT
 	xdev_hdl = xocl_get_xdev(pdev);
