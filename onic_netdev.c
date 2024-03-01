@@ -110,6 +110,42 @@ static void onic_rx_refill(struct onic_rx_queue *q)
 	onic_set_rx_head(priv->hw.qdma, q->qid, ring->next_to_use);
 }
 
+static struct onic_tx_queue *onic_xdp_tx_queue_mapping(struct onic_private *priv)
+{
+	unsigned int r_idx = smp_processor_id();
+
+	if (r_idx >= priv->num_tx_queues)
+		r_idx = r_idx % priv->num_tx_queues;
+
+	return priv->tx_queue[r_idx];
+}
+
+static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff) {
+	struct onic_private *priv = netdev_priv(q->netdev);
+	struct xdp_frame *xdpf = xdp_convert_buff_to_frame(xdp_buff);
+	struct onic_ring *tx_ring;
+	struct onic_tx_queue *tx_queue;
+	struct netdev_queue *nq;
+	u32 ret = 0, cpu = smp_processor_id();
+
+	if (unlikely(!xdpf))
+		return ONIC_XDP_CONSUMED;
+
+	tx_queue = q->xdp_prog ? priv->tx_queue[q->qid] : NULL;
+	if (unlikely(!tx_queue))
+		return -ENXIO;
+
+	tx_ring = &tx_queue->ring;
+	nq = netdev_get_tx_queue(tx_queue->netdev, tx_queue->qid);
+
+	__netif_tx_lock(nq, cpu);
+	// TODO:
+	// ret = onic_xmit_xdp_ring(priv, tx_ring, xdpf);
+	__netif_tx_unlock(nq);
+
+	return ret;
+}
+
 static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_buff) {
 	int err, result = ONIC_XDP_PASS;
 	struct bpf_prog *xdp_prog;
@@ -124,8 +160,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 		case XDP_PASS:
 			break;
     case XDP_TX:
-			// TODO:
-			// result = onic_xdp_xmit(adapter, xdp_buff);
+			result = onic_xdp_xmit_back(rx_queue, xdp_buff);
 			break;
     case XDP_REDIRECT:
 			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
@@ -239,12 +274,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	 	xdp.data_hard_start = data; // needed by bpf_xpd_adjust_head, not used
 	 	xdp.data_meta = data; // additional packet metadata, none ATM
 
-		skb = napi_alloc_skb(napi, len);
-		if (!skb) {
-			rv = -ENOMEM;
-			break;
-		}
-
 		res = onic_run_xdp(q, &xdp);
 		if (IS_ERR(res)) {
 			unsigned int xdp_res = -PTR_ERR(res);
@@ -253,17 +282,27 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 				// TODO:
 				xdp_xmit |= xdp_res;
 			}
+
+			// Allocate skb only if we are continuing to process the packet
+			if (xdp_res & ONIC_XDP_PASS) {
+				skb = napi_alloc_skb(napi, len);
+				if (!skb) {
+					rv = -ENOMEM;
+					break;
+				}
+
+				skb_put_data(skb, data, len);
+				skb->protocol = eth_type_trans(skb, q->netdev);
+				skb->ip_summed = CHECKSUM_NONE;
+				skb_record_rx_queue(skb, qid);
+				rv = napi_gro_receive(napi, skb);
+				if (rv < 0) {
+					netdev_err(q->netdev, "napi_gro_receive, err = %d", rv);
+					break;
+				}
+			}
 		}
 
-		skb_put_data(skb, data, len);
-		skb->protocol = eth_type_trans(skb, q->netdev);
-		skb->ip_summed = CHECKSUM_NONE;
-		skb_record_rx_queue(skb, qid);
-		rv = napi_gro_receive(napi, skb);
-		if (rv < 0) {
-			netdev_err(q->netdev, "napi_gro_receive, err = %d", rv);
-			break;
-		}
 		priv->netdev_stats.rx_packets++;
 		priv->netdev_stats.rx_bytes += len;
 
@@ -909,8 +948,42 @@ int onic_xdp(struct net_device *dev, struct netdev_bpf *xdp) {
 	}
 }
 
-// TODO: stub
 int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 flags) {
-	return 0;
+	struct onic_private *priv = netdev_priv(dev);
+	struct onic_ring *tx_ring;
+	struct onic_tx_queue *tx_queue;
+	struct netdev_queue *nq;
+	int i, drops = 0, cpu = smp_processor_id();
+
+	if (unlikely(test_and_set_bit(0, priv->state)))
+		return -ENETDOWN;
+	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK))
+		return -EINVAL;
+
+	tx_queue = priv->xdp_prog ? onic_xdp_tx_queue_mapping(priv) : NULL;
+	if (unlikely(!tx_queue))
+		return -ENXIO;
+
+	tx_ring = &tx_queue->ring;
+	nq = netdev_get_tx_queue(tx_queue->netdev, tx_queue->qid);
+
+	__netif_tx_lock(nq, cpu);
+	for (i = 0; i < n; i++) {
+		struct xdp_frame *frame = frames[i];
+		int err;
+
+		err = 0;
+		// TODO: err = onic_xmit_xdp_ring(priv, rx_ring, frame);
+		if (err != ONIC_XDP_TX) {
+			xdp_return_frame_rx_napi(frame);
+			drops++;
+		}
+	}
+	__netif_tx_unlock(nq);
+
+	if (unlikely(flags & XDP_XMIT_FLUSH))
+		onic_ring_increment_tail(tx_ring);
+
+	return n - drops;
 }
 
