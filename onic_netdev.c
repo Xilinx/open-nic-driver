@@ -556,6 +556,15 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	q->vector = priv->q_vector[vid];
 	q->qid = qid;
 
+	if (xdp_rxq_info_is_reg(&q->xdp_rxq))
+		xdp_rxq_info_unreg(&q->xdp_rxq);
+
+	rv = xdp_rxq_info_reg(&q->xdp_rxq, dev, qid, q->napi.napi_id);
+	if (rv < 0) {
+		netdev_err(dev, "Failed to register xdp_rxq index %u\n", q->qid);
+		return rv;
+	}
+
 	/* allocate DMA memory for RX descriptor ring */
 	ring = &q->desc_ring;
 	ring->count = onic_ring_count(desc_rngcnt_idx);
