@@ -167,6 +167,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	bool napi_cmpl_rval = 0;
 	bool flipped = 0;
 	bool debug = 0;
+	void *res;
 
 	struct xdp_buff xdp;
 	unsigned int xdp_xmit = 0;
@@ -244,7 +245,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 			break;
 		}
 
-		void *res = onic_run_xdp(q, &xdp);
+		res = onic_run_xdp(q, &xdp);
 		if (IS_ERR(res)) {
 			unsigned int xdp_res = -PTR_ERR(res);
 
@@ -332,10 +333,11 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 				cmpl.color);
 	}
 
-	if (xdp_xmit & ONIC_XDP_REDIR)
-		xdp_do_flush_map;
+	// TODO:
+	// if (xdp_xmit & ONIC_XDP_REDIR)
+	// 	xdp_do_flush_map();
 
-	if (xdp_xmit & IGB_XDP_TX) {
+	if (xdp_xmit & XDP_TX) {
 		// TODO: handle XDP_TX
 	}
 
