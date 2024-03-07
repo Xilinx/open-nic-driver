@@ -76,6 +76,10 @@ struct qdma_c2h_st_desc {
 #define QDMA_WB_STAT_DW_PIDX_MASK               GENMASK_ULL(15, 0)
 #define QDMA_WB_STAT_DW_CIDX_MASK               GENMASK_ULL(31, 16)
 
+/**
+* pidx is the producer index
+* cidx is the consumer index
+*/
 struct qdma_wb_stat {
 	u16 pidx;
 	u16 cidx;
