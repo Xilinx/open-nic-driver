@@ -76,24 +76,15 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 
 	for (i = 0; i < work; ++i) {
 		struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
-		// struct sk_buff *skb ; //= buf->skb;
-		// struct xdp_frame *xdpf;
 
-		// dma_unmap_single(&priv->pdev->dev, buf->dma_addr, buf->len,
-		 // DMA_TO_DEVICE);
-		// dev_kfree_skb_any(skb); // problem: fix this deallocation to account for the fact that in the tx ring there will be both skb and xdp frames!
-		//something like
-		if (buf->type == ONIC_TX_BUF_TYPE_SKB  ) {
+		if (buf->type == ONIC_TX_BUF_TYPE_SKB) {
 		  dma_unmap_single(&priv->pdev->dev, buf->dma_addr, buf->len,
 				 DMA_TO_DEVICE);
 			dev_kfree_skb_any(buf->skb);
+		} else {
+			xdp_return_frame(buf->xdpf);
 		}
-		else {
-			//based on the igb driver implemenation
-			// TODO check if this is right, maybe we need to use the napi version
-			xdp_return_frame(buf->xdpf); 
-		}
-   
+
 		onic_ring_increment_tail(ring);
 	}
 
@@ -133,20 +124,14 @@ static struct onic_tx_queue *onic_xdp_tx_queue_mapping(struct onic_private *priv
 	return priv->tx_queue[r_idx];
 }
 
-
-
 static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *tx_queue, struct xdp_frame *xdpf)
  {
-	 //TODO
-
-
 	u8 *desc_ptr;
 	dma_addr_t dma_addr;
 	struct onic_ring *ring;
   struct qdma_h2c_st_desc desc;
 	bool debug = 0;
 	ring = &tx_queue->ring;
-
 
 	if (onic_ring_full(ring)) {
 		if (debug)
@@ -157,7 +142,6 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	dma_addr = dma_map_single(&priv->pdev->dev, xdpf->data,xdpf->len, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr)))
 		return ONIC_XDP_CONSUMED;
-	
 
 	desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
 	desc.len = xdpf->len;
@@ -171,33 +155,20 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	tx_queue->buffer[ring->next_to_use].len = xdpf->len;
 
 	// TODO add some xdp stats
-	
+
 	priv->netdev_stats.tx_packets++;
 	priv->netdev_stats.tx_bytes += xdpf->len;
 	onic_ring_increment_head(ring);
 
+	// This gets called only if version is >= 5.3.0 since we do not support
+	// TX/REDIR on older versions
+	if (onic_ring_full(ring) || !netdev_xmit_more()) {
+		wmb();
+		onic_set_tx_head(priv->hw.qdma, tx_queue->qid, ring->next_to_use);
+	}
 
-		
-	// #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
-		if (onic_ring_full(ring) || !netdev_xmit_more()) {
-	// #elif defined(RHEL_RELEASE_CODE)
-	// #if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1)
-	        // if (onic_ring_full(ring) || !netdev_xmit_more()) {
-	// #endif
-	// #else
-	// the skb->xmit_more check is copied from the xmit_frame function has to be removed for obvious reason
-	// (no skb here). I'm unsure of the implication tho -> is it ok to require kernel 5.3.0 and call it a day?
-		// if (onic_ring_full(ring) || !skb->xmit_more) {
-	// #endif
-			wmb();
-			onic_set_tx_head(priv->hw.qdma, tx_queue->qid, ring->next_to_use);
-		}
-
-		return NETDEV_TX_OK;
-	
+	return NETDEV_TX_OK;
 }
-
-
 
 static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff) {
 	struct onic_private *priv = netdev_priv(q->netdev);
@@ -237,6 +208,10 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 	switch (act){
 		case XDP_PASS:
 			break;
+// Since before 5.3.0 the xmit_more hint was tied to skbs, and in XDP we run
+// before skb allocation, we cannot correctly implement onic_xdp_xmit_frame and
+// thus XDP_TX and XDP_REDIRECT
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
     case XDP_TX:
 			result = onic_xdp_xmit_back(rx_queue, xdp_buff);
 			break;
@@ -247,6 +222,25 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			else
 				result = ONIC_XDP_CONSUMED;
 			break;
+#elif defined(RHEL_RELEASE_CODE)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
+    case XDP_TX:
+			result = onic_xdp_xmit_back(rx_queue, xdp_buff);
+			break;
+    case XDP_REDIRECT:
+			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
+			if (!err)
+				result = ONIC_XDP_REDIR;
+			else
+				result = ONIC_XDP_CONSUMED;
+			break;
+#endif
+#else
+		case XDP_TX:
+			fallthrough;
+		case XDP_REDIRECT
+			fallthrough;
+#endif
     default:
 			bpf_warn_invalid_xdp_action(act);
 			fallthrough;
@@ -357,7 +351,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 			unsigned int xdp_res = -PTR_ERR(res);
 
 			if (xdp_res & (ONIC_XDP_TX | ONIC_XDP_REDIR)) {
-				// TODO:
 				xdp_xmit |= xdp_res;
 			}
 
@@ -450,13 +443,14 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 				cmpl.color);
 	}
 
-	// TODO:
 	if (xdp_xmit & ONIC_XDP_REDIR)
 		xdp_do_flush_map();
 
-	if (xdp_xmit & XDP_TX) {
-		// TODO: handle XDP_TX
-	}
+	// TODO: test if this makes sense
+	// if (xdp_xmit & XDP_TX) {
+	// 	struct igb_ring *tx_ring = onic_xdp_tx_queue_mapping(adapter);
+	// 	igb_xdp_ring_update_tail(tx_ring);
+	// }
 
 	if (cmpl_ring->next_to_clean == cmpl_stat.pidx) {
 		if (debug)
@@ -679,6 +673,13 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	rv = xdp_rxq_info_reg(&q->xdp_rxq, dev, qid, q->napi.napi_id);
 	if (rv < 0) {
 		netdev_err(dev, "Failed to register xdp_rxq index %u\n", q->qid);
+		return rv;
+	}
+
+	xdp_rxq_info_unreg_mem_model(&q->xdp_rxq);
+	rv = xdp_rxq_info_reg_mem_model(&q->xdp_rxq, MEM_TYPE_PAGE_SHARED, NULL);
+	if (rv < 0) {
+		netdev_err(dev, "Failed to register xdp_rxq memory model %u\n", q->qid);
 		return rv;
 	}
 
@@ -925,7 +926,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	q->buffer[ring->next_to_use].skb = skb;
 	q->buffer[ring->next_to_use].dma_addr = dma_addr;
 	q->buffer[ring->next_to_use].len = skb->len;
-	
+
 	priv->netdev_stats.tx_packets++;
 	priv->netdev_stats.tx_bytes += skb->len;
 

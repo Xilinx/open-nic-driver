@@ -41,7 +41,7 @@
 
 enum onic_tx_buf_type {
 	ONIC_TX_BUF_TYPE_SKB = 0,
-	ONIC_TX_BUF_TYPE_XDP,
+	ONIC_TX_BUF_TYPE_XDP = 1,
 };
 
 struct onic_tx_buffer {

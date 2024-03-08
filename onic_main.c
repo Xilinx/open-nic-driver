@@ -15,6 +15,7 @@
  * the file called "COPYING".
  */
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/errno.h>
@@ -133,7 +134,14 @@ static const struct net_device_ops onic_netdev_ops = {
 	.ndo_change_mtu = onic_change_mtu,
 	.ndo_get_stats64 = onic_get_stats64,
 	.ndo_bpf = onic_xdp,
+// For why we do this, see onic_netdev.c:onix_xdp_run
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 	.ndo_xdp_xmit = onic_xdp_xmit,
+#elif defined(RHEL_RELEASE_CODE)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
+	.ndo_xdp_xmit = onic_xdp_xmit,
+#endif
+#endif
 };
 
 extern void onic_set_ethtool_ops(struct net_device *netdev);
