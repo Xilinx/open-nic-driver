@@ -412,8 +412,8 @@ static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
 {
 	struct onic_rx_queue *q = priv->rx_queue[qid];
 	struct onic_ring *ring;
-	u32 size;
-	int real_count;
+	u32 size, real_count;
+	int i;
 
 	if (!q)
 		return;
@@ -440,6 +440,11 @@ static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
 	if (ring->desc)
 		dma_free_coherent(&priv->pdev->dev, size, ring->desc,
 				  ring->dma_addr);
+
+	for (i = 0; i < real_count; ++i) {
+		struct page *pg = q->buffer[i].pg;
+		__free_pages(pg, 0);
+	}
 
 	kfree(q->buffer);
 	kfree(q);
