@@ -106,6 +106,17 @@ struct onic_q_vector {
 	int numa_node;
 };
 
+struct onic_xdp_stats {
+	
+	u64	xdp_redirect;
+	u64	xdp_pass;
+	u64	xdp_drop;
+	u64	xdp_xmit;
+	u64	xdp_xmit_err;
+	u64	xdp_tx;
+	u64	xdp_tx_err;
+};
+
 /**
  * struct onic_private - OpenNIC driver private data
  **/
@@ -125,6 +136,7 @@ struct onic_private {
 	struct net_device *netdev;
 	struct bpf_prog *xdp_prog;
 	struct rtnl_link_stats64 netdev_stats;
+	struct onic_xdp_stats xdp_stats;
 	spinlock_t tx_lock;
 	spinlock_t rx_lock;
 

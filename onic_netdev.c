@@ -154,7 +154,6 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	tx_queue->buffer[ring->next_to_use].dma_addr = dma_addr;
 	tx_queue->buffer[ring->next_to_use].len = xdpf->len;
 
-	// TODO add some xdp stats
 
 	priv->netdev_stats.tx_packets++;
 	priv->netdev_stats.tx_bytes += xdpf->len;
@@ -178,24 +177,29 @@ static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff
 	struct netdev_queue *nq;
 	u32 ret = 0, cpu = smp_processor_id();
 
-	if (unlikely(!xdpf))
+	if (unlikely(!xdpf)){
+		priv->xdp_stats.xdp_tx_err++;
 		return ONIC_XDP_CONSUMED;
+		}
 
 	tx_queue = q->xdp_prog ? priv->tx_queue[q->qid] : NULL;
-	if (unlikely(!tx_queue))
+	if (unlikely(!tx_queue)){
+		priv->xdp_stats.xdp_tx_err++;
 		return -ENXIO;
+	}
 
 	tx_ring = &tx_queue->ring;
 	nq = netdev_get_tx_queue(tx_queue->netdev, tx_queue->qid);
 
 	__netif_tx_lock(nq, cpu);
 	ret = onic_xmit_xdp_ring(priv, tx_queue, xdpf);
+	priv->xdp_stats.xdp_tx++;
 	__netif_tx_unlock(nq);
 
 	return ret;
 }
 
-static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_buff) {
+static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_buff, struct onic_private *priv) {
 	int err, result = ONIC_XDP_PASS;
 	struct bpf_prog *xdp_prog;
 	u32 act;
@@ -207,6 +211,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 	act = bpf_prog_run_xdp(xdp_prog, xdp_buff);
 	switch (act){
 		case XDP_PASS:
+			priv->xdp_stats.xdp_pass++;
 			break;
 // Since before 5.3.0 the xmit_more hint was tied to skbs, and in XDP we run
 // before skb allocation, we cannot correctly implement onic_xdp_xmit_frame and
@@ -217,8 +222,10 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			break;
     case XDP_REDIRECT:
 			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
-			if (!err)
+			if (!err) {
 				result = ONIC_XDP_REDIR;
+			priv->xdp_stats.xdp_redirect++;
+		}
 			else
 				result = ONIC_XDP_CONSUMED;
 			break;
@@ -229,8 +236,10 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			break;
     case XDP_REDIRECT:
 			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
-			if (!err)
+			if (!err){
 				result = ONIC_XDP_REDIR;
+			  priv->xdp_stats.xdp_redirect++;
+			}
 			else
 				result = ONIC_XDP_CONSUMED;
 			break;
@@ -245,10 +254,13 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			bpf_warn_invalid_xdp_action(act);
 			fallthrough;
     case XDP_ABORTED:
+		/* my reference implementation of xdp_stats was the mvneta driver and it does not track XDP_ABORTED events*/
+		/* by themselves and groups them in XDP_DROP stats.*/
 			trace_xdp_exception(rx_queue->netdev, xdp_prog, act);
 			fallthrough;
     case XDP_DROP:
 			result = ONIC_XDP_CONSUMED;
+			priv->xdp_stats.xdp_drop++;
 			break;
   }
 
@@ -346,7 +358,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	 	xdp.data_hard_start = data; // needed by bpf_xpd_adjust_head, not used
 	 	xdp.data_meta = data; // additional packet metadata, none ATM
 
-		res = onic_run_xdp(q, &xdp);
+		res = onic_run_xdp(q, &xdp,priv);
 		if (IS_ERR(res)) {
 			unsigned int xdp_res = -PTR_ERR(res);
 
@@ -1035,14 +1047,20 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 	struct netdev_queue *nq;
 	int i, drops = 0, cpu = smp_processor_id();
 
-	if (unlikely(test_and_set_bit(0, priv->state)))
+	if (unlikely(test_and_set_bit(0, priv->state))){
+			priv->xdp_stats.xdp_xmit_err++;
 		return -ENETDOWN;
-	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK))
+	}
+	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK)){
+			priv->xdp_stats.xdp_xmit_err++;
 		return -EINVAL;
+	}
 
 	tx_queue = priv->xdp_prog ? onic_xdp_tx_queue_mapping(priv) : NULL;
-	if (unlikely(!tx_queue))
+	if (unlikely(!tx_queue)){
+			priv->xdp_stats.xdp_xmit_err++;
 		return -ENXIO;
+	}
 
 	tx_ring = &tx_queue->ring;
 	nq = netdev_get_tx_queue(tx_queue->netdev, tx_queue->qid);
@@ -1056,12 +1074,15 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 		err = onic_xmit_xdp_ring(priv, tx_queue, frame);
 		if (err != ONIC_XDP_TX) {
 			xdp_return_frame_rx_napi(frame);
+			priv->xdp_stats.xdp_xmit_err++;
 			drops++;
+		} else {
+			priv->xdp_stats.xdp_xmit++;
 		}
 	}
 	__netif_tx_unlock(nq);
 
-	if (unlikely(flags & XDP_XMIT_FLUSH))
+	if (unlikely(flags & XDP_XMIT_FLUSH)) // TODO i'm not sure i understand the purpose of this if
 		onic_ring_increment_tail(tx_ring);
 
 	return n - drops;

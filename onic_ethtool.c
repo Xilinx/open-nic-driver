@@ -23,8 +23,19 @@
 
 extern const char onic_drv_name[];
 extern const char onic_drv_ver[];
+// netdev stats are stats kept by the driver, like xdp stats, onic_stats are kept in the NIC and accessed via the on-board registers 
+enum { NETDEV_STATS, ONIC_STATS };
 
-enum {NETDEV_STATS, ONIC_STATS};
+enum {
+	ETHTOOL_XDP_REDIRECT,
+	ETHTOOL_XDP_PASS,
+	ETHTOOL_XDP_DROP,
+	ETHTOOL_XDP_TX,
+	ETHTOOL_XDP_TX_ERR,
+	ETHTOOL_XDP_XMIT,
+	ETHTOOL_XDP_XMIT_ERR,
+};
+
 
 struct onic_stats {
     char stat_string[ETH_GSTRING_LEN];
@@ -34,7 +45,7 @@ struct onic_stats {
     int stat1_offset;
 };
 
-#define _STAT(_name, _stat0, _stat1) { \
+#define _STAT_ONIC(_name, _stat0, _stat1) { \
 	.stat_string = _name, \
 	.type = ONIC_STATS, \
 	.sizeof_stat = sizeof(u32), \
@@ -42,184 +53,201 @@ struct onic_stats {
 	.stat1_offset = _stat1, \
 }
 
+
+#define _STAT_NETDEV(_name,_stat) {\
+	.stat_string = _name, \
+	.type = NETDEV_STATS, \
+	.sizeof_stat = sizeof(u64), \
+	.stat0_offset = _stat, \
+	.stat1_offset = _stat, \
+}
+
 static const struct onic_stats onic_gstrings_stats[] = {
-    _STAT("stat_tx_total_pkts",
+    _STAT_ONIC("stat_tx_total_pkts",
           CMAC_OFFSET_STAT_TX_TOTAL_PKTS(0),
           CMAC_OFFSET_STAT_TX_TOTAL_PKTS(1)),
-    _STAT("stat_tx_total_good_pkts",
+    _STAT_ONIC("stat_tx_total_good_pkts",
           CMAC_OFFSET_STAT_TX_TOTAL_GOOD_PKTS(0),
           CMAC_OFFSET_STAT_TX_TOTAL_GOOD_PKTS(1)),
-    _STAT("stat_tx_total_bytes",
+    _STAT_ONIC("stat_tx_total_bytes",
           CMAC_OFFSET_STAT_TX_TOTAL_BYTES(0),
           CMAC_OFFSET_STAT_TX_TOTAL_BYTES(1)),
-    _STAT("stat_tx_total_good_bytes",
+    _STAT_ONIC("stat_tx_total_good_bytes",
           CMAC_OFFSET_STAT_TX_TOTAL_GOOD_BYTES(0),
           CMAC_OFFSET_STAT_TX_TOTAL_GOOD_BYTES(1)),
-    _STAT("stat_tx_pkt_64_bytes",
+    _STAT_ONIC("stat_tx_pkt_64_bytes",
           CMAC_OFFSET_STAT_TX_PKT_64_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_64_BYTES(1)),
-    _STAT("stat_tx_pkt_65_127_bytes",
+    _STAT_ONIC("stat_tx_pkt_65_127_bytes",
           CMAC_OFFSET_STAT_TX_PKT_65_127_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_65_127_BYTES(1)),
-    _STAT("stat_tx_pkt_128_255_bytes",
+    _STAT_ONIC("stat_tx_pkt_128_255_bytes",
           CMAC_OFFSET_STAT_TX_PKT_128_255_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_128_255_BYTES(1)),
-    _STAT("stat_tx_pkt_256_511_bytes",
+    _STAT_ONIC("stat_tx_pkt_256_511_bytes",
           CMAC_OFFSET_STAT_TX_PKT_256_511_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_256_511_BYTES(1)),
-    _STAT("stat_tx_pkt_512_1023_bytes",
+    _STAT_ONIC("stat_tx_pkt_512_1023_bytes",
           CMAC_OFFSET_STAT_TX_PKT_512_1023_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_512_1023_BYTES(1)),
-    _STAT("stat_tx_pkt_1024_1518_bytes",
+    _STAT_ONIC("stat_tx_pkt_1024_1518_bytes",
           CMAC_OFFSET_STAT_TX_PKT_1024_1518_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_1024_1518_BYTES(1)),
-    _STAT("stat_tx_pkt_1519_1522_bytes",
+    _STAT_ONIC("stat_tx_pkt_1519_1522_bytes",
           CMAC_OFFSET_STAT_TX_PKT_1519_1522_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_1519_1522_BYTES(1)),
-    _STAT("stat_tx_pkt_1523_1548_bytes",
+    _STAT_ONIC("stat_tx_pkt_1523_1548_bytes",
           CMAC_OFFSET_STAT_TX_PKT_1523_1548_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_1523_1548_BYTES(1)),
-    _STAT("stat_tx_pkt_1549_2047_bytes",
+    _STAT_ONIC("stat_tx_pkt_1549_2047_bytes",
           CMAC_OFFSET_STAT_TX_PKT_1549_2047_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_1549_2047_BYTES(1)),
-    _STAT("stat_tx_pkt_2048_4095_bytes",
+    _STAT_ONIC("stat_tx_pkt_2048_4095_bytes",
           CMAC_OFFSET_STAT_TX_PKT_2048_4095_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_2048_4095_BYTES(1)),
-    _STAT("stat_tx_pkt_4096_8191_bytes",
+    _STAT_ONIC("stat_tx_pkt_4096_8191_bytes",
           CMAC_OFFSET_STAT_TX_PKT_4096_8191_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_4096_8191_BYTES(1)),
-    _STAT("stat_tx_pkt_8192_9215_bytes",
+    _STAT_ONIC("stat_tx_pkt_8192_9215_bytes",
           CMAC_OFFSET_STAT_TX_PKT_8192_9215_BYTES(0),
           CMAC_OFFSET_STAT_TX_PKT_8192_9215_BYTES(1)),
-    _STAT("stat_tx_pkt_large",
+    _STAT_ONIC("stat_tx_pkt_large",
           CMAC_OFFSET_STAT_TX_PKT_LARGE(0),
           CMAC_OFFSET_STAT_TX_PKT_LARGE(1)),
-    _STAT("stat_tx_pkt_small",
+    _STAT_ONIC("stat_tx_pkt_small",
           CMAC_OFFSET_STAT_TX_PKT_SMALL(0),
           CMAC_OFFSET_STAT_TX_PKT_SMALL(1)),
-    _STAT("stat_tx_bad_fcs",
+    _STAT_ONIC("stat_tx_bad_fcs",
           CMAC_OFFSET_STAT_TX_BAD_FCS(0),
           CMAC_OFFSET_STAT_TX_BAD_FCS(1)),
-    _STAT("stat_tx_unicast",
+    _STAT_ONIC("stat_tx_unicast",
           CMAC_OFFSET_STAT_TX_UNICAST(0),
           CMAC_OFFSET_STAT_TX_UNICAST(1)),
-    _STAT("stat_tx_multicast",
+    _STAT_ONIC("stat_tx_multicast",
           CMAC_OFFSET_STAT_TX_MULTICAST(0),
           CMAC_OFFSET_STAT_TX_MULTICAST(1)),
-    _STAT("stat_tx_broadcast",
+    _STAT_ONIC("stat_tx_broadcast",
           CMAC_OFFSET_STAT_TX_BROADCAST(0),
           CMAC_OFFSET_STAT_TX_BROADCAST(1)),
-    _STAT("stat_tx_vlan",
+    _STAT_ONIC("stat_tx_vlan",
           CMAC_OFFSET_STAT_TX_VLAN(0),
           CMAC_OFFSET_STAT_TX_VLAN(1)),
-    _STAT("stat_tx_pause",
+    _STAT_ONIC("stat_tx_pause",
           CMAC_OFFSET_STAT_TX_PAUSE(0),
           CMAC_OFFSET_STAT_TX_PAUSE(1)),
-    _STAT("stat_tx_user_pause",
+    _STAT_ONIC("stat_tx_user_pause",
           CMAC_OFFSET_STAT_TX_USER_PAUSE(0),
           CMAC_OFFSET_STAT_TX_USER_PAUSE(1)),
-    _STAT("stat_rx_total_pkts",
+    _STAT_ONIC("stat_rx_total_pkts",
           CMAC_OFFSET_STAT_RX_TOTAL_PKTS(0),
           CMAC_OFFSET_STAT_RX_TOTAL_PKTS(1)),
-    _STAT("stat_rx_total_good_pkts",
+    _STAT_ONIC("stat_rx_total_good_pkts",
           CMAC_OFFSET_STAT_RX_TOTAL_GOOD_PKTS(0),
           CMAC_OFFSET_STAT_RX_TOTAL_GOOD_PKTS(1)),
-    _STAT("stat_rx_total_bytes",
+    _STAT_ONIC("stat_rx_total_bytes",
           CMAC_OFFSET_STAT_RX_TOTAL_BYTES(0),
           CMAC_OFFSET_STAT_RX_TOTAL_BYTES(1)),
-    _STAT("stat_rx_total_good_bytes",
+    _STAT_ONIC("stat_rx_total_good_bytes",
           CMAC_OFFSET_STAT_RX_TOTAL_GOOD_BYTES(0),
           CMAC_OFFSET_STAT_RX_TOTAL_GOOD_BYTES(1)),
-    _STAT("stat_rx_pkt_64_bytes",
+    _STAT_ONIC("stat_rx_pkt_64_bytes",
           CMAC_OFFSET_STAT_RX_PKT_64_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_64_BYTES(1)),
-    _STAT("stat_rx_pkt_65_127_bytes",
+    _STAT_ONIC("stat_rx_pkt_65_127_bytes",
           CMAC_OFFSET_STAT_RX_PKT_65_127_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_65_127_BYTES(1)),
-    _STAT("stat_rx_pkt_128_255_bytes",
+    _STAT_ONIC("stat_rx_pkt_128_255_bytes",
           CMAC_OFFSET_STAT_RX_PKT_128_255_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_128_255_BYTES(1)),
-    _STAT("stat_rx_pkt_256_511_bytes",
+    _STAT_ONIC("stat_rx_pkt_256_511_bytes",
           CMAC_OFFSET_STAT_RX_PKT_256_511_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_256_511_BYTES(1)),
-    _STAT("stat_rx_pkt_512_1023_bytes",
+    _STAT_ONIC("stat_rx_pkt_512_1023_bytes",
           CMAC_OFFSET_STAT_RX_PKT_512_1023_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_512_1023_BYTES(1)),
-    _STAT("stat_rx_pkt_1024_1518_bytes",
+    _STAT_ONIC("stat_rx_pkt_1024_1518_bytes",
           CMAC_OFFSET_STAT_RX_PKT_1024_1518_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_1024_1518_BYTES(1)),
-    _STAT("stat_rx_pkt_1519_1522_bytes",
+    _STAT_ONIC("stat_rx_pkt_1519_1522_bytes",
           CMAC_OFFSET_STAT_RX_PKT_1519_1522_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_1519_1522_BYTES(1)),
-    _STAT("stat_rx_pkt_1523_1548_bytes",
+    _STAT_ONIC("stat_rx_pkt_1523_1548_bytes",
           CMAC_OFFSET_STAT_RX_PKT_1523_1548_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_1523_1548_BYTES(1)),
-    _STAT("stat_rx_pkt_1549_2047_bytes",
+    _STAT_ONIC("stat_rx_pkt_1549_2047_bytes",
           CMAC_OFFSET_STAT_RX_PKT_1549_2047_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_1549_2047_BYTES(1)),
-    _STAT("stat_rx_pkt_2048_4095_bytes",
+    _STAT_ONIC("stat_rx_pkt_2048_4095_bytes",
           CMAC_OFFSET_STAT_RX_PKT_2048_4095_BYTES(0),
           CMAC_OFFSET_STAT_RX_PKT_2048_4095_BYTES(1)),
-    _STAT("stat_rx_pkt_4096_8191_bytes",
+    _STAT_ONIC("stat_rx_pkt_4096_8191_bytes",
            CMAC_OFFSET_STAT_RX_PKT_4096_8191_BYTES(0),
            CMAC_OFFSET_STAT_RX_PKT_4096_8191_BYTES(1)),
-    _STAT("stat_rx_pkt_8192_9215_bytes",
+    _STAT_ONIC("stat_rx_pkt_8192_9215_bytes",
            CMAC_OFFSET_STAT_RX_PKT_8192_9215_BYTES(0),
            CMAC_OFFSET_STAT_RX_PKT_8192_9215_BYTES(1)),
-    _STAT("stat_rx_pkt_large",
+    _STAT_ONIC("stat_rx_pkt_large",
            CMAC_OFFSET_STAT_RX_PKT_LARGE(0),
            CMAC_OFFSET_STAT_RX_PKT_LARGE(1)),
-    _STAT("stat_rx_pkt_small",
+    _STAT_ONIC("stat_rx_pkt_small",
            CMAC_OFFSET_STAT_RX_PKT_SMALL(0),
            CMAC_OFFSET_STAT_RX_PKT_SMALL(1)),
-    _STAT("stat_rx_undersize",
+    _STAT_ONIC("stat_rx_undersize",
            CMAC_OFFSET_STAT_RX_UNDERSIZE(0),
            CMAC_OFFSET_STAT_RX_UNDERSIZE(1)),
-    _STAT("stat_rx_fragment",
+    _STAT_ONIC("stat_rx_fragment",
            CMAC_OFFSET_STAT_RX_FRAGMENT(0),
            CMAC_OFFSET_STAT_RX_FRAGMENT(1)),
-    _STAT("stat_rx_oversize",
+    _STAT_ONIC("stat_rx_oversize",
            CMAC_OFFSET_STAT_RX_OVERSIZE(0),
            CMAC_OFFSET_STAT_RX_OVERSIZE(1)),
-    _STAT("stat_rx_toolong",
+    _STAT_ONIC("stat_rx_toolong",
           CMAC_OFFSET_STAT_RX_TOOLONG(0),
           CMAC_OFFSET_STAT_RX_TOOLONG(1)),
-    _STAT("stat_rx_jabber",
+    _STAT_ONIC("stat_rx_jabber",
           CMAC_OFFSET_STAT_RX_JABBER(0),
           CMAC_OFFSET_STAT_RX_JABBER(1)),
-    _STAT("stat_rx_bad_fcs",
+    _STAT_ONIC("stat_rx_bad_fcs",
            CMAC_OFFSET_STAT_RX_BAD_FCS(0),
            CMAC_OFFSET_STAT_RX_BAD_FCS(1)),
-    _STAT("stat_rx_pkt_bad_fcs",
+    _STAT_ONIC("stat_rx_pkt_bad_fcs",
           CMAC_OFFSET_STAT_RX_PKT_BAD_FCS(0),
           CMAC_OFFSET_STAT_RX_PKT_BAD_FCS(1)),
-    _STAT("stat_rx_stomped_fcs",
+    _STAT_ONIC("stat_rx_stomped_fcs",
            CMAC_OFFSET_STAT_RX_STOMPED_FCS(0),
            CMAC_OFFSET_STAT_RX_STOMPED_FCS(1)),
-    _STAT("stat_rx_unicast",
+    _STAT_ONIC("stat_rx_unicast",
           CMAC_OFFSET_STAT_RX_UNICAST(0),
           CMAC_OFFSET_STAT_RX_UNICAST(1)),
-    _STAT("stat_rx_multicast",
+    _STAT_ONIC("stat_rx_multicast",
           CMAC_OFFSET_STAT_RX_MULTICAST(0),
           CMAC_OFFSET_STAT_RX_MULTICAST(1)),
-    _STAT("stat_rx_broadcast",
+    _STAT_ONIC("stat_rx_broadcast",
           CMAC_OFFSET_STAT_RX_BROADCAST(0),
           CMAC_OFFSET_STAT_RX_BROADCAST(1)),
-    _STAT("stat_rx_vlan",
+    _STAT_ONIC("stat_rx_vlan",
           CMAC_OFFSET_STAT_RX_VLAN(0),
           CMAC_OFFSET_STAT_RX_VLAN(1)),
-    _STAT("stat_rx_pause",
+    _STAT_ONIC("stat_rx_pause",
           CMAC_OFFSET_STAT_RX_PAUSE(0),
           CMAC_OFFSET_STAT_RX_PAUSE(1)),
-    _STAT("stat_rx_user_pause",
+    _STAT_ONIC("stat_rx_user_pause",
           CMAC_OFFSET_STAT_RX_USER_PAUSE(0),
           CMAC_OFFSET_STAT_RX_USER_PAUSE(1)),
-    _STAT("stat_rx_inrangeerr",
+    _STAT_ONIC("stat_rx_inrangeerr",
           CMAC_OFFSET_STAT_RX_INRANGEERR(0),
           CMAC_OFFSET_STAT_RX_INRANGEERR(1)),
-    _STAT("stat_rx_truncated",
+    _STAT_ONIC("stat_rx_truncated",
           CMAC_OFFSET_STAT_RX_TRUNCATED(0),
           CMAC_OFFSET_STAT_RX_TRUNCATED(1)),
+      
+    _STAT_NETDEV("rx_xdp_redirect", ETHTOOL_XDP_REDIRECT),
+    _STAT_NETDEV("rx_xdp_pass", ETHTOOL_XDP_PASS ),
+    _STAT_NETDEV("rx_xdp_drop", ETHTOOL_XDP_DROP ),
+    _STAT_NETDEV("rx_xdp_tx",ETHTOOL_XDP_TX ),
+    _STAT_NETDEV("rx_xdp_tx_errors", ETHTOOL_XDP_TX_ERR ),
+    _STAT_NETDEV("tx_xdp_xmit", ETHTOOL_XDP_XMIT ),
+    _STAT_NETDEV("tx_xdp_xmit_errors", ETHTOOL_XDP_XMIT_ERR ),  
 };
 
 #define ONIC_QUEUE_STATS_LEN 0
@@ -283,10 +311,38 @@ static void onic_get_ethtool_stats(struct net_device *netdev,
     else onic_write_reg(hw, CMAC_OFFSET_TICK(1), 1);
 
     for (i = 0; i < ONIC_GLOBAL_STATS_LEN; i++) {
+      if (onic_gstrings_stats[i].type == ONIC_STATS) {
         if (func_id == 0)
           off = onic_gstrings_stats[i].stat0_offset;
-        else off = onic_gstrings_stats[i].stat1_offset;
-        data[i] = onic_read_reg(hw,off);
+        else
+          off = onic_gstrings_stats[i].stat1_offset;
+        data[i] = onic_read_reg(hw, off);
+      } else {
+        switch (onic_gstrings_stats[i].stat0_offset) {
+
+        case ETHTOOL_XDP_REDIRECT:
+          data[i] = priv->xdp_stats.xdp_redirect;
+          break;
+        case ETHTOOL_XDP_PASS:
+          data[i] = priv->xdp_stats.xdp_pass;
+          break;
+        case ETHTOOL_XDP_DROP:
+          data[i] = priv->xdp_stats.xdp_drop;
+          break;
+        case ETHTOOL_XDP_TX:
+          data[i] = priv->xdp_stats.xdp_tx;
+          break;
+        case ETHTOOL_XDP_TX_ERR:
+          data[i] = priv->xdp_stats.xdp_tx_err;
+          break;
+        case ETHTOOL_XDP_XMIT:
+          data[i] = priv->xdp_stats.xdp_xmit;
+          break;
+        case ETHTOOL_XDP_XMIT_ERR:
+          data[i] = priv->xdp_stats.xdp_xmit_err;
+          break;
+        }
+      }
     }
 
     return;
