@@ -166,7 +166,7 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 		onic_set_tx_head(priv->hw.qdma, tx_queue->qid, ring->next_to_use);
 	}
 
-	return NETDEV_TX_OK;
+	return ONIC_XDP_TX;
 }
 
 static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff) {
@@ -180,7 +180,7 @@ static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff
 	if (unlikely(!xdpf)){
 		priv->xdp_stats.xdp_tx_err++;
 		return ONIC_XDP_CONSUMED;
-		}
+	}
 
 	tx_queue = q->xdp_prog ? priv->tx_queue[q->qid] : NULL;
 	if (unlikely(!tx_queue)){
@@ -219,15 +219,15 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
     case XDP_TX:
 			result = onic_xdp_xmit_back(rx_queue, xdp_buff);
+			if (result == ONIC_XDP_CONSUMED)
+				goto out_failure;
 			break;
     case XDP_REDIRECT:
 			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
-			if (!err) {
-				result = ONIC_XDP_REDIR;
+			if (err)
+				goto out_failure;
+			result = ONIC_XDP_REDIR;
 			priv->xdp_stats.xdp_redirect++;
-		}
-			else
-				result = ONIC_XDP_CONSUMED;
 			break;
 #elif defined(RHEL_RELEASE_CODE)
 #if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
@@ -254,6 +254,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			bpf_warn_invalid_xdp_action(act);
 			fallthrough;
     case XDP_ABORTED:
+out_failure:
 		/* my reference implementation of xdp_stats was the mvneta driver and it does not track XDP_ABORTED events*/
 		/* by themselves and groups them in XDP_DROP stats.*/
 			trace_xdp_exception(rx_queue->netdev, xdp_prog, act);
@@ -456,13 +457,12 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	}
 
 	if (xdp_xmit & ONIC_XDP_REDIR)
-		xdp_do_flush_map();
+		xdp_do_flush();
 
-	// TODO: test if this makes sense
-	// if (xdp_xmit & XDP_TX) {
-	// 	struct igb_ring *tx_ring = onic_xdp_tx_queue_mapping(adapter);
-	// 	igb_xdp_ring_update_tail(tx_ring);
-	// }
+	if (xdp_xmit & XDP_TX) {
+		struct onic_tx_queue *tx_queue = onic_xdp_tx_queue_mapping(priv);
+		onic_ring_increment_tail(&tx_queue->ring);
+	}
 
 	if (cmpl_ring->next_to_clean == cmpl_stat.pidx) {
 		if (debug)
@@ -1082,7 +1082,7 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 	}
 	__netif_tx_unlock(nq);
 
-	if (unlikely(flags & XDP_XMIT_FLUSH)) // TODO i'm not sure i understand the purpose of this if
+	if (unlikely(flags & XDP_XMIT_FLUSH))
 		onic_ring_increment_tail(tx_ring);
 
 	return n - drops;
