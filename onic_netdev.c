@@ -356,7 +356,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	 	xdp.frame_sz = FRAME_SIZE; // i'm not sure this is correct, probably is pkt_len + some headers
 	 	xdp.data = data; // data is the pointer to the data in the page, and its being passed into the sk_buff struct
 	 	xdp.data_end = data + len; // data + len is the pointer to the end of the data in the page, and its being passed into the sk_buff struct
-	 	xdp.data_hard_start = data; // needed by bpf_xpd_adjust_head, not used
+	 	xdp.data_hard_start = data - XDP_PACKET_HEADROOM; 
 	 	xdp.data_meta = data; // additional packet metadata, none ATM
 
 		res = onic_run_xdp(q, &xdp,priv);
@@ -731,7 +731,7 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 		}
 
 		q->buffer[i].pg = pg;
-		q->buffer[i].offset = 0;
+		q->buffer[i].offset = XDP_PACKET_HEADROOM;
 	}
 
 	/* map pages and initialize descriptors */

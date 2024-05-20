@@ -1,0 +1,2 @@
+#!/bin/sh
+KVERSION=5.15.0-94-generic KDIR=/lib/modules/5.15.0-94-generic/build make $@
