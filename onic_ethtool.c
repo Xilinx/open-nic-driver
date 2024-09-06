@@ -296,10 +296,34 @@ static void onic_get_ethtool_stats(struct net_device *netdev,
     struct onic_private *priv = netdev_priv(netdev);
     struct onic_hardware *hw = &priv->hw;
     struct pci_dev *pdev = priv->pdev;
-    int i;
+    int i,j;
     u16 func_id;
     u32 off;
 
+    struct {
+            u64 xdp_redirect;
+            u64 xdp_pass;
+            u64 xdp_drop;
+            u64 xdp_tx;
+            u64 xdp_tx_err;
+            u64 xdp_xmit;
+            u64 xdp_xmit_err;
+      } global_xdp_stats = {0};
+
+
+      for (j =0; j < priv->num_rx_queues; j++) {
+        global_xdp_stats.xdp_redirect += priv->rx_queue[j]->xdp_rx_stats.xdp_redirect;
+        global_xdp_stats.xdp_pass += priv->rx_queue[j]->xdp_rx_stats.xdp_pass;
+        global_xdp_stats.xdp_drop += priv->rx_queue[j]->xdp_rx_stats.xdp_drop;
+        global_xdp_stats.xdp_tx += priv->rx_queue[j]->xdp_rx_stats.xdp_tx;
+        global_xdp_stats.xdp_tx_err += priv->rx_queue[j]->xdp_rx_stats.xdp_tx_err;
+
+      }
+      for (j =0; j < priv->num_tx_queues; j++) {
+        global_xdp_stats.xdp_xmit += priv->tx_queue[j]->xdp_tx_stats.xdp_xmit;
+        global_xdp_stats.xdp_xmit_err += priv->tx_queue[j]->xdp_tx_stats.xdp_xmit_err;
+      }
+    
     func_id = PCI_FUNC(pdev->devfn);
 
     // Note :
@@ -321,25 +345,25 @@ static void onic_get_ethtool_stats(struct net_device *netdev,
         switch (onic_gstrings_stats[i].stat0_offset) {
 
         case ETHTOOL_XDP_REDIRECT:
-          data[i] = priv->xdp_stats.xdp_redirect;
+          data[i] = global_xdp_stats.xdp_redirect;
           break;
         case ETHTOOL_XDP_PASS:
-          data[i] = priv->xdp_stats.xdp_pass;
+          data[i] = global_xdp_stats.xdp_pass;
           break;
         case ETHTOOL_XDP_DROP:
-          data[i] = priv->xdp_stats.xdp_drop;
+          data[i] = global_xdp_stats.xdp_drop;
           break;
         case ETHTOOL_XDP_TX:
-          data[i] = priv->xdp_stats.xdp_tx;
+          data[i] = global_xdp_stats.xdp_tx;
           break;
         case ETHTOOL_XDP_TX_ERR:
-          data[i] = priv->xdp_stats.xdp_tx_err;
+          data[i] = global_xdp_stats.xdp_tx_err;
           break;
         case ETHTOOL_XDP_XMIT:
-          data[i] = priv->xdp_stats.xdp_xmit;
+          data[i] = global_xdp_stats.xdp_xmit;
           break;
         case ETHTOOL_XDP_XMIT_ERR:
-          data[i] = priv->xdp_stats.xdp_xmit_err;
+          data[i] = global_xdp_stats.xdp_xmit_err;
           break;
         }
       }

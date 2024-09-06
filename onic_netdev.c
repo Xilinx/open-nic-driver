@@ -14,6 +14,8 @@
  * The full GNU General Public License is included in this distribution in
  * the file called "COPYING".
  */
+#include <linux/if_link.h>
+#include <linux/pci_regs.h>
 #include <linux/version.h>
 #include <linux/pci.h>
 #include <linux/etherdevice.h>
@@ -77,12 +79,14 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 	for (i = 0; i < work; ++i) {
 		struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
 
+		dma_unmap_single(&priv->pdev->dev, buf->dma_addr, buf->len, DMA_TO_DEVICE);
+
 		if (buf->type == ONIC_TX_BUF_TYPE_SKB) {
-		  dma_unmap_single(&priv->pdev->dev, buf->dma_addr, buf->len,
-				 DMA_TO_DEVICE);
 			dev_kfree_skb_any(buf->skb);
+		}  else if (buf->type == ONIC_TX_BUF_TYPE_XDP) {
+			// nothing to do here
 		} else {
-			xdp_return_frame(buf->xdpf);
+			netdev_err(priv->netdev, "unknown buffer type %d\n", buf->type);
 		}
 
 		onic_ring_increment_tail(ring);
@@ -129,9 +133,13 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	u8 *desc_ptr;
 	dma_addr_t dma_addr;
 	struct onic_ring *ring;
-  struct qdma_h2c_st_desc desc;
-	bool debug = 0;
+  	struct qdma_h2c_st_desc desc;
+	bool debug = 1;
+	struct rtnl_link_stats64 *pcpu_stats_pointer;
+
 	ring = &tx_queue->ring;
+	
+	onic_tx_clean(tx_queue);
 
 	if (onic_ring_full(ring)) {
 		if (debug)
@@ -153,10 +161,11 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	tx_queue->buffer[ring->next_to_use].type = ONIC_TX_BUF_TYPE_XDP;
 	tx_queue->buffer[ring->next_to_use].dma_addr = dma_addr;
 	tx_queue->buffer[ring->next_to_use].len = xdpf->len;
+	
 
-
-	priv->netdev_stats.tx_packets++;
-	priv->netdev_stats.tx_bytes += xdpf->len;
+  	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
+  	pcpu_stats_pointer->tx_packets++;
+	pcpu_stats_pointer->tx_bytes += xdpf->len;
 	onic_ring_increment_head(ring);
 
 	// This gets called only if version is >= 5.3.0 since we do not support
@@ -178,13 +187,13 @@ static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff
 	u32 ret = 0, cpu = smp_processor_id();
 
 	if (unlikely(!xdpf)){
-		priv->xdp_stats.xdp_tx_err++;
+		q->xdp_rx_stats.xdp_tx_err++;
 		return ONIC_XDP_CONSUMED;
 	}
 
 	tx_queue = q->xdp_prog ? priv->tx_queue[q->qid] : NULL;
 	if (unlikely(!tx_queue)){
-		priv->xdp_stats.xdp_tx_err++;
+		q->xdp_rx_stats.xdp_tx_err++;
 		return -ENXIO;
 	}
 
@@ -193,7 +202,7 @@ static int onic_xdp_xmit_back(struct onic_rx_queue *q, struct xdp_buff *xdp_buff
 
 	__netif_tx_lock(nq, cpu);
 	ret = onic_xmit_xdp_ring(priv, tx_queue, xdpf);
-	priv->xdp_stats.xdp_tx++;
+	q->xdp_rx_stats.xdp_tx++;
 	__netif_tx_unlock(nq);
 
 	return ret;
@@ -205,13 +214,15 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 	u32 act;
 
 	xdp_prog = rx_queue->xdp_prog;
-	if (!xdp_prog)
+	if (!xdp_prog){
 		goto out;
+	}
 
 	act = bpf_prog_run_xdp(xdp_prog, xdp_buff);
+	
 	switch (act){
 		case XDP_PASS:
-			priv->xdp_stats.xdp_pass++;
+			rx_queue->xdp_rx_stats.xdp_pass++;
 			break;
 // Since before 5.3.0 the xmit_more hint was tied to skbs, and in XDP we run
 // before skb allocation, we cannot correctly implement onic_xdp_xmit_frame and
@@ -227,7 +238,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			if (err)
 				goto out_failure;
 			result = ONIC_XDP_REDIR;
-			priv->xdp_stats.xdp_redirect++;
+			rx_queue->xdp_rx_stats.xdp_redirect++;
 			break;
 #elif defined(RHEL_RELEASE_CODE)
 #if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
@@ -238,7 +249,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			err = xdp_do_redirect(rx_queue->netdev, xdp_buff, xdp_prog);
 			if (!err){
 				result = ONIC_XDP_REDIR;
-			  priv->xdp_stats.xdp_redirect++;
+			  rx_queue->xdp_rx_stats.xdp_redirect++;
 			}
 			else
 				result = ONIC_XDP_CONSUMED;
@@ -261,7 +272,7 @@ out_failure:
 			fallthrough;
     case XDP_DROP:
 			result = ONIC_XDP_CONSUMED;
-			priv->xdp_stats.xdp_drop++;
+			rx_queue->xdp_rx_stats.xdp_drop++;
 			break;
   }
 
@@ -291,6 +302,8 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 
 	struct xdp_buff xdp;
 	unsigned int xdp_xmit = 0;
+	struct rtnl_link_stats64 *pcpu_stats_pointer;
+	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
 
 	for (i = 0; i < priv->num_tx_queues; i++)
 		onic_tx_clean(priv->tx_queue[i]);
@@ -352,12 +365,14 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 		// data is the pointer to the data in the page, and its being passed into the sk_buff struct
 		/* maximum packet size is 1514, less than the page size */
 		data = (u8 *)(page_address(buf->pg) + buf->offset);
+
+		xdp.data = page_address(buf->pg) + buf->offset;
 		xdp.rxq = &q->xdp_rxq;
-	 	xdp.frame_sz = FRAME_SIZE; // i'm not sure this is correct, probably is pkt_len + some headers
-	 	xdp.data = data; // data is the pointer to the data in the page, and its being passed into the sk_buff struct
-	 	xdp.data_end = data + len; // data + len is the pointer to the end of the data in the page, and its being passed into the sk_buff struct
-	 	xdp.data_hard_start = data - XDP_PACKET_HEADROOM; 
-	 	xdp.data_meta = data; // additional packet metadata, none ATM
+	 	//xdp.data = xdp.data; // data is the pointer to the data in the page, and its being passed into the sk_buff struct
+	 	xdp.data_end = xdp.data + len; // data + len is the pointer to the end of the data in the page, and its being passed into the sk_buff struct
+	 	xdp.data_hard_start = xdp.data - XDP_PACKET_HEADROOM; 
+		xdp.data_meta = xdp.data; 
+		xdp.frame_sz = PAGE_SIZE;
 
 		res = onic_run_xdp(q, &xdp,priv);
 		if (IS_ERR(res)) {
@@ -387,8 +402,9 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 			}
 		}
 
-		priv->netdev_stats.rx_packets++;
-		priv->netdev_stats.rx_bytes += len;
+		//TODO: replace this with per-queue stats in order to avoid contention
+		pcpu_stats_pointer->rx_packets++;
+		pcpu_stats_pointer->rx_bytes += len;
 
 		onic_ring_increment_tail(desc_ring);
 
@@ -459,11 +475,6 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 	if (xdp_xmit & ONIC_XDP_REDIR)
 		xdp_do_flush();
 
-	if (xdp_xmit & XDP_TX) {
-		struct onic_tx_queue *tx_queue = onic_xdp_tx_queue_mapping(priv);
-		onic_ring_increment_tail(&tx_queue->ring);
-	}
-
 	if (cmpl_ring->next_to_clean == cmpl_stat.pidx) {
 		if (debug)
 			netdev_info(
@@ -502,8 +513,8 @@ out_of_budget:
 		netdev_info(
 			q->netdev,
 			"rx_poll returning work %u, rx_packets %lld, rx_bytes %lld",
-			work, priv->netdev_stats.rx_packets,
-			priv->netdev_stats.rx_bytes);
+			work, pcpu_stats_pointer->rx_packets,
+			pcpu_stats_pointer->rx_bytes);
 	return work;
 }
 
@@ -527,7 +538,7 @@ static void onic_clear_tx_queue(struct onic_private *priv, u16 qid)
 	if (ring->desc)
 		dma_free_coherent(&priv->pdev->dev, size, ring->desc,
 				  ring->dma_addr);
-	kfree(q->buffer);
+	if (q->buffer) kfree(q->buffer);
 	kfree(q);
 	priv->tx_queue[qid] = NULL;
 }
@@ -579,6 +590,9 @@ static int onic_init_tx_queue(struct onic_private *priv, u16 qid)
 	ring->next_to_use = 0;
 	ring->next_to_clean = 0;
 	ring->color = 0;
+
+	netdev_info(dev, "TX queue %d, ring count %d, ring size %d, real_count %d", 
+		    qid, ring->count, size, real_count);
 
 	/* initialize TX buffers */
 	q->buffer =
@@ -642,7 +656,7 @@ static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
 		__free_pages(pg, 0);
 	}
 
-	kfree(q->buffer);
+	if (q->buffer) kfree(q->buffer);
 	kfree(q);
 	priv->rx_queue[qid] = NULL;
 }
@@ -678,6 +692,8 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 	q->netdev = dev;
 	q->vector = priv->q_vector[vid];
 	q->qid = qid;
+
+	q->xdp_prog = priv->xdp_prog;
 
 	if (xdp_rxq_info_is_reg(&q->xdp_rxq))
 		xdp_rxq_info_unreg(&q->xdp_rxq);
@@ -900,6 +916,8 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	u8 *desc_ptr;
 	int rv;
 	bool debug = 0;
+	struct rtnl_link_stats64 *pcpu_stats_pointer;
+	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
 
 	q = priv->tx_queue[qid];
 	ring = &q->ring;
@@ -923,8 +941,8 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 	if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
 		dev_kfree_skb(skb);
-		priv->netdev_stats.tx_dropped++;
-		priv->netdev_stats.tx_errors++;
+		pcpu_stats_pointer->tx_dropped++;
+		pcpu_stats_pointer->tx_errors++;
 		return NETDEV_TX_OK;
 	}
 
@@ -939,8 +957,8 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	q->buffer[ring->next_to_use].dma_addr = dma_addr;
 	q->buffer[ring->next_to_use].len = skb->len;
 
-	priv->netdev_stats.tx_packets++;
-	priv->netdev_stats.tx_bytes += skb->len;
+	pcpu_stats_pointer->tx_packets++;
+	pcpu_stats_pointer->tx_bytes += skb->len;
 
 	onic_ring_increment_head(ring);
 
@@ -988,13 +1006,27 @@ int onic_change_mtu(struct net_device *dev, int mtu)
 inline void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct onic_private *priv = netdev_priv(dev);
-
-	stats->tx_packets = priv->netdev_stats.tx_packets;
-	stats->tx_bytes = priv->netdev_stats.tx_bytes;
-	stats->rx_packets = priv->netdev_stats.rx_packets;
-	stats->rx_bytes = priv->netdev_stats.rx_bytes;
-	stats->tx_dropped = priv->netdev_stats.tx_dropped;
-	stats->tx_errors = priv->netdev_stats.tx_errors;
+	struct rtnl_link_stats64 *pcpu_ptr;
+	struct rtnl_link_stats64 total_stats = { };
+	unsigned int cpu;
+	for_each_possible_cpu(cpu) {
+		pcpu_ptr = per_cpu_ptr(priv->netdev_stats, cpu);
+		
+		
+		total_stats.rx_packets += pcpu_ptr->rx_packets;
+		total_stats.rx_bytes += pcpu_ptr->rx_bytes;
+		total_stats.tx_packets += pcpu_ptr->tx_packets;
+		total_stats.tx_bytes += pcpu_ptr->tx_bytes;
+		total_stats.tx_errors += pcpu_ptr->tx_errors;
+		total_stats.tx_dropped += pcpu_ptr->tx_dropped;
+	}
+	
+	stats->tx_packets = total_stats.tx_packets;
+	stats->tx_bytes = total_stats.tx_bytes;
+	stats->rx_packets = total_stats.rx_packets;
+	stats->rx_bytes = total_stats.rx_bytes;
+	stats->tx_dropped = total_stats.tx_dropped;
+	stats->tx_errors = total_stats.tx_errors;
 }
 
 
@@ -1047,19 +1079,19 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 	struct netdev_queue *nq;
 	int i, drops = 0, cpu = smp_processor_id();
 
-	if (unlikely(test_and_set_bit(0, priv->state))){
-			priv->xdp_stats.xdp_xmit_err++;
-		return -ENETDOWN;
-	}
-	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK)){
-			priv->xdp_stats.xdp_xmit_err++;
-		return -EINVAL;
+	tx_queue =  onic_xdp_tx_queue_mapping(priv);
+
+	if (!priv->xdp_prog) {
+		netdev_err(dev, "No XDP program");
+		tx_queue->xdp_tx_stats.xdp_xmit_err++;
+		return -ENXIO;
 	}
 
-	tx_queue = priv->xdp_prog ? onic_xdp_tx_queue_mapping(priv) : NULL;
-	if (unlikely(!tx_queue)){
-			priv->xdp_stats.xdp_xmit_err++;
-		return -ENXIO;
+
+	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK)){
+			netdev_err(dev, "Invalid flags");
+		tx_queue->xdp_tx_stats.xdp_xmit_err++;
+		return -EINVAL;
 	}
 
 	tx_ring = &tx_queue->ring;
@@ -1074,16 +1106,14 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 		err = onic_xmit_xdp_ring(priv, tx_queue, frame);
 		if (err != ONIC_XDP_TX) {
 			xdp_return_frame_rx_napi(frame);
-			priv->xdp_stats.xdp_xmit_err++;
+			netdev_err(dev, "Failed to transmit frame");
+			tx_queue->xdp_tx_stats.xdp_xmit_err++;
 			drops++;
 		} else {
-			priv->xdp_stats.xdp_xmit++;
+			tx_queue->xdp_tx_stats.xdp_xmit++;
 		}
 	}
 	__netif_tx_unlock(nq);
-
-	if (unlikely(flags & XDP_XMIT_FLUSH))
-		onic_ring_increment_tail(tx_ring);
 
 	return n - drops;
 }

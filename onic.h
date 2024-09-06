@@ -34,10 +34,10 @@
 #define ONIC_FLAG_MASTER_PF		0
 
 /* XDP */
-#define ONIC_XDP_PASS     BIT(0)
-#define ONIC_XDP_CONSUMED	BIT(0)
-#define ONIC_XDP_TX       BIT(1)
-#define ONIC_XDP_REDIR    BIT(2)
+#define ONIC_XDP_PASS    	BIT(0)	
+#define ONIC_XDP_CONSUMED	BIT(1)
+#define ONIC_XDP_TX       	BIT(2)
+#define ONIC_XDP_REDIR    	BIT(3)
 
 enum onic_tx_buf_type {
 	ONIC_TX_BUF_TYPE_SKB = 0,
@@ -83,6 +83,11 @@ struct onic_tx_queue {
 	struct onic_tx_buffer *buffer;
 	struct onic_ring ring;
 	struct onic_q_vector *vector;
+
+	struct {
+		u64	xdp_xmit;
+		u64	xdp_xmit_err;
+	} xdp_tx_stats;
 };
 
 struct onic_rx_queue {
@@ -97,6 +102,15 @@ struct onic_rx_queue {
 	struct napi_struct napi;
 	struct bpf_prog *xdp_prog;
 	struct xdp_rxq_info xdp_rxq;
+
+	struct {
+		u64 xdp_redirect;
+		u64 xdp_pass;
+		u64 xdp_drop;
+		u64	xdp_tx;
+		u64	xdp_tx_err;
+	} xdp_rx_stats;
+	
 };
 
 struct onic_q_vector {
@@ -106,16 +120,6 @@ struct onic_q_vector {
 	int numa_node;
 };
 
-struct onic_xdp_stats {
-	
-	u64	xdp_redirect;
-	u64	xdp_pass;
-	u64	xdp_drop;
-	u64	xdp_xmit;
-	u64	xdp_xmit_err;
-	u64	xdp_tx;
-	u64	xdp_tx_err;
-};
 
 /**
  * struct onic_private - OpenNIC driver private data
@@ -135,8 +139,7 @@ struct onic_private {
 
 	struct net_device *netdev;
 	struct bpf_prog *xdp_prog;
-	struct rtnl_link_stats64 netdev_stats;
-	struct onic_xdp_stats xdp_stats;
+	struct rtnl_link_stats64 *netdev_stats;
 	spinlock_t tx_lock;
 	spinlock_t rx_lock;
 
