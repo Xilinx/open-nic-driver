@@ -240,6 +240,25 @@ static const struct onic_stats onic_gstrings_stats[] = {
     _STAT_ONIC("stat_rx_truncated",
           CMAC_OFFSET_STAT_RX_TRUNCATED(0),
           CMAC_OFFSET_STAT_RX_TRUNCATED(1)),
+    _STAT_ONIC("stat_adapt_tx_sent",
+          CMAC_ADPT_OFFSET_TX_PKT_RECV(0),
+          CMAC_ADPT_OFFSET_TX_PKT_RECV(1)),
+    _STAT_ONIC("stat_adapt_tx_drop",
+          CMAC_ADPT_OFFSET_TX_PKT_DROP(0),
+          CMAC_ADPT_OFFSET_TX_PKT_DROP(1)),
+    _STAT_ONIC("stat_adapt_rx_recv",
+          CMAC_ADPT_OFFSET_RX_PKT_RECV(0),
+          CMAC_ADPT_OFFSET_RX_PKT_RECV(1)),
+    _STAT_ONIC("stat_adapt_rx_drop",
+          CMAC_ADPT_OFFSET_RX_PKT_DROP(0),
+          CMAC_ADPT_OFFSET_RX_PKT_DROP(1)),
+    _STAT_ONIC("stat_adapt_rx_error",
+          CMAC_ADPT_OFFSET_RX_PKT_ERROR(0),
+          CMAC_ADPT_OFFSET_RX_PKT_ERROR(1)),
+
+
+
+          
       
     _STAT_NETDEV("rx_xdp_redirect", ETHTOOL_XDP_REDIRECT),
     _STAT_NETDEV("rx_xdp_pass", ETHTOOL_XDP_PASS ),
@@ -390,12 +409,108 @@ static int onic_get_sset_count(struct net_device *netdev, int sset)
     return ONIC_STATS_LEN;
 }
 
+static u32 onic_get_rxfh_indir_size(struct net_device *dev)
+{
+	return INDIRECTION_TABLE_SIZE;
+}
+
+static u32 onic_get_rxfh_key_size(struct net_device *netdev)
+{
+	return ONIC_EN_RSS_KEY_SIZE;
+}
+
+
+static int onic_get_rxfh(struct net_device *dev, u32 *ring_index, u8 *key,
+		u8 *hfunc)
+{
+	struct onic_private *priv = netdev_priv(dev);
+	u32 n = onic_get_rxfh_indir_size(dev);
+      u16 func_id = PCI_FUNC(priv->pdev->devfn);
+	u32 i;
+
+     	if (ring_index) {
+		for (i = 0; i < n; i++) {
+			ring_index[i] = 0xFFFF & onic_read_reg(&priv->hw, QDMA_FUNC_OFFSET_INDIR_TABLE(func_id,i));
+			
+		}
+	}
+
+	if (key) {
+		for (i = 0; i < ONIC_EN_RSS_KEY_SIZE/4; i++) {
+			u32 val = onic_read_reg(&priv->hw, QDMA_FUNC_OFFSET_HASH_KEY(func_id,i));
+			memcpy(&key[i*4],&val, 4);
+		}
+	}
+
+	if (hfunc)
+		*hfunc = ETH_RSS_HASH_TOP;
+
+	return 0;
+}
+
+
+static int onic_set_rxfh(struct net_device *dev, const u32 *ring_index,
+			    const u8 *key, const u8 hfunc)
+{
+
+	
+	struct onic_private *priv = netdev_priv(dev);
+	int n = onic_get_rxfh_indir_size(dev);
+      u16 func_id = PCI_FUNC(priv->pdev->devfn);
+	int i=0;
+      
+    	///* Calculate RSS table size and make sure flows are spread evenly
+	// * between rings
+	// */
+	// Check that we have a valid ring index
+	if (ring_index) {
+            for (i = 0; i < n; i++) {
+                  // Check that the ring index is within the number of rx queues
+                  if (ring_index[i] >= priv->num_rx_queues) {
+                        printk("error in onic_set_rxfh: ring_index >= priv->num_rx_queues\n");
+                        return -EINVAL;
+                  }
+                  onic_write_reg(&priv->hw, QDMA_FUNC_OFFSET_INDIR_TABLE(func_id,i), ring_index[i]);
+            }
+      }
+
+	if (key) {
+	      for (i = 0; i < ONIC_EN_RSS_KEY_SIZE/4; i++) {
+                  u32 val;
+                  memcpy(&val, &key[i*4], 4);
+                  onic_write_reg(&priv->hw, QDMA_FUNC_OFFSET_HASH_KEY(func_id,i), val);
+	      }
+      }
+	return 0;
+}
+
+
+int onic_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info, u32 *rule_locs) {
+	struct onic_private *priv = netdev_priv(dev);
+	
+      switch (info->cmd) {
+	case ETHTOOL_GRXRINGS:
+		info->data =  priv->num_rx_queues;
+		return 0;
+	case ETHTOOL_GRXFH:
+		return -EOPNOTSUPP;
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
+
 static const struct ethtool_ops onic_ethtool_ops = {
-    .get_drvinfo       = onic_get_drvinfo,
-    .get_link          = onic_get_link,
-    .get_ethtool_stats = onic_get_ethtool_stats,
-    .get_strings       = onic_get_strings,
-    .get_sset_count    = onic_get_sset_count,
+    .get_drvinfo         = onic_get_drvinfo,
+    .get_link            = onic_get_link,
+    .get_ethtool_stats   = onic_get_ethtool_stats,
+    .get_strings         = onic_get_strings,
+    .get_sset_count      = onic_get_sset_count,
+    .get_rxfh_indir_size = onic_get_rxfh_indir_size,
+    .get_rxfh_key_size   = onic_get_rxfh_key_size,
+    .get_rxfh            = onic_get_rxfh,
+    .set_rxfh            = onic_set_rxfh,
+    .get_rxnfc           = onic_get_rxnfc,
 };
 
 void onic_set_ethtool_ops(struct net_device *netdev)
