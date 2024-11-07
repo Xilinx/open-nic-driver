@@ -359,8 +359,11 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 		struct onic_rx_buffer *buf =
 			&q->buffer[desc_ring->next_to_clean];
 		struct sk_buff *skb;
+		dma_addr_t dma_addr = buf->dma_addr;
 		int len = cmpl.pkt_len;
 		u8 *data;
+
+		dma_sync_single_for_cpu(&priv->pdev->dev, dma_addr, len, DMA_FROM_DEVICE);
 
 		// data is the pointer to the data in the page, and its being passed into the sk_buff struct
 		/* maximum packet size is 1514, less than the page size */
@@ -760,6 +763,7 @@ static int onic_init_rx_queue(struct onic_private *priv, u16 qid)
 		desc.dst_addr = dma_map_page(&priv->pdev->dev, pg, 0, PAGE_SIZE,
 					     DMA_FROM_DEVICE);
 		desc.dst_addr += offset;
+		q->buffer[i].dma_addr = desc.dst_addr;
 
 		qdma_pack_c2h_st_desc(desc_ptr, &desc);
 	}
