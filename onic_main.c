@@ -172,7 +172,6 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	/* QDMA only supports 32-bit consistent DMA for descriptor ring */
-	//TODO:look here
 	rv = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
 	if (rv < 0) {
 		dev_err(&pdev->dev, "Failed to set DMA masks");

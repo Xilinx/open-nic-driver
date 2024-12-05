@@ -140,7 +140,6 @@ static void onic_rx_page_refill(struct onic_rx_queue *q)
 	struct page *pg;
 	u8 *desc_ptr = desc_ring->desc + QDMA_C2H_ST_DESC_SIZE * desc_ring->next_to_clean;
 
-	// TODO: this may fail , handle this case
 	pg = page_pool_dev_alloc_pages(q->page_pool);
 
 	q->buffer[desc_ring->next_to_clean].pg = pg;
@@ -166,7 +165,7 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	u8 *desc_ptr;
 	dma_addr_t dma_addr;
 	struct onic_ring *ring;
-  	struct qdma_h2c_st_desc desc;
+	struct qdma_h2c_st_desc desc;
 	bool debug = 1;
 	struct rtnl_link_stats64 *pcpu_stats_pointer;
 	enum onic_tx_buf_type type;
@@ -212,14 +211,10 @@ static int onic_xmit_xdp_ring(struct onic_private *priv,struct  onic_tx_queue  *
 	tx_queue->buffer[ring->next_to_use].len = xdpf->len;
 	
 
-  	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
-  	pcpu_stats_pointer->tx_packets++;
+	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
+	pcpu_stats_pointer->tx_packets++;
 	pcpu_stats_pointer->tx_bytes += xdpf->len;
 	onic_ring_increment_head(ring);
-
-	// This gets called only if version is >= 5.3.0 since we do not support
-	// TX/REDIR on older versions
-	
 
 	return ONIC_XDP_TX;
 }
@@ -320,8 +315,6 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			fallthrough;
     case XDP_ABORTED:
 out_failure:
-		/* my reference implementation of xdp_stats was the mvneta driver and it does not track XDP_ABORTED events*/
-		/* by themselves and groups them in XDP_DROP stats.*/
 			trace_xdp_exception(rx_queue->netdev, xdp_prog, act);
 			fallthrough;
     case XDP_DROP:
@@ -730,9 +723,6 @@ static void onic_clear_rx_queue(struct onic_private *priv, u16 qid)
 
 	for (i = 0; i < real_count; ++i) {
 		struct page *pg = q->buffer[i].pg;
-		// the third argument is "bool allow_direct", and it tells the allocator if the page was
-		// freed by the consumer, allow lockless caching.
-		// TODO: puttting to false shouldn't cause any problems, understand when to use true
 		page_pool_put_full_page(q->page_pool, pg, false);
 	}
 
@@ -1031,10 +1021,9 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	bool debug = 0;
 	struct rtnl_link_stats64 *pcpu_stats_pointer;
 	pcpu_stats_pointer = this_cpu_ptr(priv->netdev_stats);
-
 	q = priv->tx_queue[qid];
 	ring = &q->ring;
-
+	
 	onic_tx_clean(q);
 
 	if (onic_ring_full(ring)) {
@@ -1144,8 +1133,6 @@ inline void onic_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *s
 
 
 static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
-	// Since the maximum packet size is at most 1514, less than a page, and the rx
-	// buffer is one page in size, no need to check for size
 
 	struct onic_private *priv = netdev_priv(dev);
 	bool running = netif_running(dev);
@@ -1166,7 +1153,6 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 	if (old_prog)
 		bpf_prog_put(old_prog);
 
-	/* bpf is just replaced, RXQ and MTU are already setup */
 	if (!need_reset)
 		return 0;
 
@@ -1225,8 +1211,6 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 		onic_set_tx_head(priv->hw.qdma, tx_queue->qid, tx_queue->ring.next_to_use);
 	}
 	__netif_tx_unlock(nq);
-
-
 
 	return n - drops;
 }
