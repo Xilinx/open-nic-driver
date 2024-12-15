@@ -1151,14 +1151,19 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 			xchg(&priv->rx_queue[i]->xdp_prog, priv->xdp_prog);
 		}
 	}
-	if (old_prog)
+	if (old_prog){
+		xdp_features_clear_redirect_target(dev);
 		bpf_prog_put(old_prog);
+	}
 
 	if (!need_reset)
 		return 0;
 
 	if (running)
 		onic_open_netdev(dev);
+
+	if (need_reset && prog)
+		xdp_features_set_redirect_target(dev, false);
 
 	return 0;
 }

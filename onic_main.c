@@ -205,7 +205,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 	netdev->netdev_ops = &onic_netdev_ops;
 	onic_set_ethtool_ops(netdev);
-
+	xdp_set_features_flag(netdev, NETDEV_XDP_ACT_BASIC | NETDEV_XDP_ACT_REDIRECT);
 	snprintf(dev_name, IFNAMSIZ, "onic%ds%df%d",
 		 pdev->bus->number,
 		 PCI_SLOT(pdev->devfn),
