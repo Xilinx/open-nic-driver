@@ -20,6 +20,7 @@
 #include <linux/netdevice.h>
 #include <linux/cpumask.h>
 #include <linux/bpf.h>
+#include <net/xdp.h>
 #include <linux/bitops.h>
 
 #include "onic_hardware.h"

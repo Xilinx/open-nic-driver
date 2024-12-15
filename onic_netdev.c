@@ -23,7 +23,8 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/bpf_trace.h>
-#include <net/page_pool.h>
+#include <net/page_pool/helpers.h>
+#include <net/page_pool/types.h>
 
 #include "onic_netdev.h"
 #include "onic_hardware.h"
@@ -311,7 +312,7 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			fallthrough;
 #endif
     default:
-			bpf_warn_invalid_xdp_action(act);
+			bpf_warn_invalid_xdp_action(priv->netdev, xdp_prog, act);
 			fallthrough;
     case XDP_ABORTED:
 out_failure:
@@ -517,7 +518,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 					    "watchdog work %u, budget %u", work,
 					    budget);
 			napi_complete(napi);
-			napi_reschedule(napi);
+			napi_schedule(napi);
 			goto out_of_budget;
 		}
 
@@ -1176,7 +1177,10 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 	struct onic_ring *tx_ring;
 	struct onic_tx_queue *tx_queue;
 	struct netdev_queue *nq;
-	int i, drops = 0, cpu = smp_processor_id();
+	int i, drops = 0, cpu;
+	
+	 
+	cpu  = smp_processor_id();
 
 	tx_queue =  onic_xdp_tx_queue_mapping(priv);
 

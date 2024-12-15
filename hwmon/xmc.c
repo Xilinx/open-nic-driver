@@ -542,6 +542,9 @@ struct xocl_xmc {
 	struct xocl_xmc_privdata *priv_data;
 };
 
+int xmc_probe(struct platform_device *pdev);
+int xocl_init_xmc(void);
+void xocl_fini_xmc(void);
 
 #ifdef XMC_MB
 static int load_xmc(struct xocl_xmc *xmc);

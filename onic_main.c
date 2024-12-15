@@ -210,7 +210,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		 pdev->bus->number,
 		 PCI_SLOT(pdev->devfn),
 		 PCI_FUNC(pdev->devfn));
-	strlcpy(netdev->name, dev_name, sizeof(netdev->name));
+	strscpy(netdev->name, dev_name, sizeof(netdev->name));
 
 	memset(&saddr, 0, sizeof(struct sockaddr));
 	memcpy(saddr.sa_data, onic_default_dev_addr, 6);

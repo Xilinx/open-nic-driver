@@ -14,15 +14,18 @@
  * The full GNU General Public License is included in this distribution in
  * the file called "COPYING".
  */
+#include <linux/if_link.h>
 #include <linux/pci.h>
 #include <linux/netdevice.h>
 #include <linux/ethtool.h>
+#include <linux/version.h>
 
 #include "onic.h"
 #include "onic_register.h"
 
 extern const char onic_drv_name[];
 extern const char onic_drv_ver[];
+void onic_set_ethtool_ops(struct net_device *netdev);
 // netdev stats are stats kept by the driver, like xdp stats, onic_stats are kept in the NIC and accessed via the on-board registers 
 enum { NETDEV_STATS, ONIC_STATS };
 
@@ -278,10 +281,10 @@ static void onic_get_drvinfo(struct net_device *netdev,
 {
 	struct onic_private *priv = netdev_priv(netdev);
 
-	strlcpy(drvinfo->driver, onic_drv_name, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, onic_drv_ver,
+	strscpy(drvinfo->driver, onic_drv_name, sizeof(drvinfo->driver));
+	strscpy(drvinfo->version, onic_drv_ver,
 		sizeof(drvinfo->version));
-	strlcpy(drvinfo->bus_info, pci_name(priv->pdev),
+	strscpy(drvinfo->bus_info, pci_name(priv->pdev),
 		sizeof(drvinfo->bus_info));
 }
 
@@ -449,6 +452,7 @@ static int onic_get_rxfh(struct net_device *dev, u32 *ring_index, u8 *key,
 }
 
 
+
 static int onic_set_rxfh(struct net_device *dev, const u32 *ring_index,
 			    const u8 *key, const u8 hfunc)
 {
@@ -456,13 +460,12 @@ static int onic_set_rxfh(struct net_device *dev, const u32 *ring_index,
 	
 	struct onic_private *priv = netdev_priv(dev);
 	int n = onic_get_rxfh_indir_size(dev);
-      u16 func_id = PCI_FUNC(priv->pdev->devfn);
+  u16 func_id = PCI_FUNC(priv->pdev->devfn);
 	int i=0;
       
-    	///* Calculate RSS table size and make sure flows are spread evenly
-	// * between rings
-	// */
-	// Check that we have a valid ring index
+	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP)
+		return -EOPNOTSUPP;
+
 	if (ring_index) {
             for (i = 0; i < n; i++) {
                   // Check that the ring index is within the number of rx queues
@@ -484,8 +487,21 @@ static int onic_set_rxfh(struct net_device *dev, const u32 *ring_index,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+static int onic_set_rxfh_new(struct net_device *dev,
+                             struct ethtool_rxfh_param *rxfh_param,
+                             struct netlink_ext_ack *extack) {
+  return onic_set_rxfh(dev, rxfh_param->indir, rxfh_param->key,
+                       rxfh_param->hfunc);
+}
 
-int onic_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info, u32 *rule_locs) {
+static int onic_get_rxfh_new(struct net_device *dev,
+                             struct ethtool_rxfh_param *rxfh) {
+  return onic_get_rxfh(dev, rxfh->indir, rxfh->key, &rxfh->hfunc);
+}
+#endif
+
+static int onic_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info, u32 *rule_locs) {
 	struct onic_private *priv = netdev_priv(dev);
 	
       switch (info->cmd) {
@@ -508,8 +524,13 @@ static const struct ethtool_ops onic_ethtool_ops = {
     .get_sset_count      = onic_get_sset_count,
     .get_rxfh_indir_size = onic_get_rxfh_indir_size,
     .get_rxfh_key_size   = onic_get_rxfh_key_size,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+    .set_rxfh            = onic_set_rxfh_new,
+    .get_rxfh            = onic_get_rxfh_new,
+#else
     .get_rxfh            = onic_get_rxfh,
     .set_rxfh            = onic_set_rxfh,
+#endif
     .get_rxnfc           = onic_get_rxnfc,
 };
 
