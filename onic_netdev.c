@@ -23,8 +23,13 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/bpf_trace.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
 #include <net/page_pool/types.h>
+#else 
+#include <net/page_pool.h>
+#endif
 
 #include "onic_netdev.h"
 #include "onic_hardware.h"
@@ -312,7 +317,11 @@ static void *onic_run_xdp(struct onic_rx_queue *rx_queue, struct xdp_buff *xdp_b
 			fallthrough;
 #endif
     default:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,17,0)
 			bpf_warn_invalid_xdp_action(priv->netdev, xdp_prog, act);
+#else
+			bpf_warn_invalid_xdp_action(act);
+#endif
 			fallthrough;
     case XDP_ABORTED:
 out_failure:
@@ -1152,7 +1161,10 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 		}
 	}
 	if (old_prog){
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		xdp_features_clear_redirect_target(dev);
+#endif
 		bpf_prog_put(old_prog);
 	}
 
@@ -1162,9 +1174,11 @@ static int onic_setup_xdp_prog(struct net_device *dev, struct bpf_prog *prog) {
 	if (running)
 		onic_open_netdev(dev);
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 	if (need_reset && prog)
 		xdp_features_set_redirect_target(dev, false);
-
+#endif
 	return 0;
 }
 
