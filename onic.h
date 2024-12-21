@@ -19,6 +19,9 @@
 
 #include <linux/netdevice.h>
 #include <linux/cpumask.h>
+#include <linux/bpf.h>
+#include <net/xdp.h>
+#include <linux/bitops.h>
 
 #include "onic_hardware.h"
 
@@ -31,8 +34,24 @@
 /* flag bits */
 #define ONIC_FLAG_MASTER_PF		0
 
+/* XDP */
+#define ONIC_XDP_PASS    	BIT(0)	
+#define ONIC_XDP_CONSUMED	BIT(1)
+#define ONIC_XDP_TX       	BIT(2)
+#define ONIC_XDP_REDIR    	BIT(3)
+
+enum onic_tx_buf_type {
+	ONIC_TX_SKB = BIT(0),
+	ONIC_TX_XDPF = BIT(1),
+	ONIC_TX_XDPF_XMIT = BIT(2),
+};
+
 struct onic_tx_buffer {
-	struct sk_buff *skb;
+	enum onic_tx_buf_type type;
+	union {
+		struct sk_buff *skb;
+		struct xdp_frame *xdpf;
+	};
 	dma_addr_t dma_addr;
 	u32 len;
 	u64 time_stamp;
@@ -66,6 +85,11 @@ struct onic_tx_queue {
 	struct onic_tx_buffer *buffer;
 	struct onic_ring ring;
 	struct onic_q_vector *vector;
+
+	struct {
+		u64	xdp_xmit;
+		u64	xdp_xmit_err;
+	} xdp_tx_stats;
 };
 
 struct onic_rx_queue {
@@ -78,6 +102,18 @@ struct onic_rx_queue {
 	struct onic_q_vector *vector;
 
 	struct napi_struct napi;
+	struct bpf_prog *xdp_prog;
+	struct xdp_rxq_info xdp_rxq;
+	struct page_pool *page_pool;
+
+	struct {
+		u64 xdp_redirect;
+		u64 xdp_pass;
+		u64 xdp_drop;
+		u64	xdp_tx;
+		u64	xdp_tx_err;
+	} xdp_rx_stats;
+	
 };
 
 struct onic_q_vector {
@@ -86,6 +122,7 @@ struct onic_q_vector {
 	struct cpumask affinity_mask;
 	int numa_node;
 };
+
 
 /**
  * struct onic_private - OpenNIC driver private data
@@ -104,7 +141,8 @@ struct onic_private {
 	u16 num_rx_queues;
 
 	struct net_device *netdev;
-	struct rtnl_link_stats64 netdev_stats;
+	struct bpf_prog *xdp_prog;
+	struct rtnl_link_stats64 *netdev_stats;
 	spinlock_t tx_lock;
 	spinlock_t rx_lock;
 

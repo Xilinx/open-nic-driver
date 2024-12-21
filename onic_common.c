@@ -16,6 +16,7 @@
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ":%s: " fmt, __func__
 
+#include <linux/vmalloc.h>
 #include "onic_common.h"
 
 void print_raw_data(const u8 *data, u32 len)

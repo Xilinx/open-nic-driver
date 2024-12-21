@@ -15,6 +15,7 @@
  * the file called "COPYING".
  */
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/errno.h>
@@ -22,6 +23,7 @@
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
 #include <linux/moduleparam.h>
+#include <linux/bpf.h>
 
 #include "onic.h"
 #include "onic_hardware.h"
@@ -131,6 +133,15 @@ static const struct net_device_ops onic_netdev_ops = {
 	.ndo_do_ioctl = onic_do_ioctl,
 	.ndo_change_mtu = onic_change_mtu,
 	.ndo_get_stats64 = onic_get_stats64,
+	.ndo_bpf = onic_xdp,
+// For why we do this, see onic_netdev.c:onix_xdp_run
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
+	.ndo_xdp_xmit = onic_xdp_xmit,
+#elif defined(RHEL_RELEASE_CODE)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 1))
+	.ndo_xdp_xmit = onic_xdp_xmit,
+#endif
+#endif
 };
 
 extern void onic_set_ethtool_ops(struct net_device *netdev);
@@ -194,12 +205,14 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 	netdev->netdev_ops = &onic_netdev_ops;
 	onic_set_ethtool_ops(netdev);
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	xdp_set_features_flag(netdev, NETDEV_XDP_ACT_BASIC | NETDEV_XDP_ACT_REDIRECT);
+#endif
 	snprintf(dev_name, IFNAMSIZ, "onic%ds%df%d",
 		 pdev->bus->number,
 		 PCI_SLOT(pdev->devfn),
 		 PCI_FUNC(pdev->devfn));
-	strlcpy(netdev->name, dev_name, sizeof(netdev->name));
+	strscpy(netdev->name, dev_name, sizeof(netdev->name));
 
 	memset(&saddr, 0, sizeof(struct sockaddr));
 	memcpy(saddr.sa_data, onic_default_dev_addr, 6);
@@ -219,6 +232,12 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	priv->netdev = netdev;
 	spin_lock_init(&priv->tx_lock);
 	spin_lock_init(&priv->rx_lock);
+
+	priv->netdev_stats = alloc_percpu(struct rtnl_link_stats64);
+	if (!priv->netdev_stats) {
+		dev_err(&pdev->dev, "error in allocating netdev_stats");
+		goto free_netdev;
+	}
 
 	rv = onic_init_capacity(priv);
 	if (rv < 0) {
