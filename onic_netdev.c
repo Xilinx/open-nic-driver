@@ -38,6 +38,14 @@
 
 #define ONIC_RX_DESC_STEP 256
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
+static inline void eth_hw_addr_set(struct net_device *dev, const u8 *addr)
+{
+    memcpy(dev->dev_addr, addr, ETH_ALEN);
+}
+#endif
+
 inline static u16 onic_ring_get_real_count(struct onic_ring *ring)
 {
 	/* Valid writeback entry means one less count of descriptor entries */
