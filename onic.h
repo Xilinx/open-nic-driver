@@ -28,11 +28,14 @@
 #define ONIC_MAX_QUEUES			64
 
 /* state bits */
-#define ONIC_ERROR_INTR			0
+#define ONIC_MBOX_INTR			0
 #define ONIC_USER_INTR			1
+#define ONIC_ERROR_INTR			2
 
 /* flag bits */
 #define ONIC_FLAG_MASTER_PF		0
+#define ONIC_FLAG_MBOX_INTR		1
+#define ONIC_FLAG_USER_INTR		2
 
 /* XDP */
 #define ONIC_XDP_PASS    	BIT(0)	
@@ -117,6 +120,7 @@ struct onic_rx_queue {
 };
 
 struct onic_q_vector {
+	u16 qid;
 	u16 vid;
 	struct onic_private *priv;
 	struct cpumask affinity_mask;
