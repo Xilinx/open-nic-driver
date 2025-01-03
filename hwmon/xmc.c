@@ -3725,7 +3725,7 @@ static void xmc_enable_mailbox(struct xocl_xmc *xmc)
 #endif
 
 #ifdef XMC_XRT
-static inline int wait_reg_value(struct xocl_xmc *xmc, void __iomem *base, u32 mask)
+inline static int wait_reg_value(struct xocl_xmc *xmc, void __iomem *base, u32 mask)
 {
 	u32 val = XOCL_READ_REG32(base);
 	int i;
@@ -4136,7 +4136,7 @@ fail:
 #endif
 
 #ifdef XMC_XRT
-static inline char*
+inline static char*
 xmc_get_heartbeat_reason(enum xmc_xhe_error error_code)
 {
 	switch (error_code) {
@@ -4695,7 +4695,7 @@ MODULE_DEVICE_TABLE(of, xmc_of_ids);
 
 static struct platform_driver xmc_driver = {
 	.probe		= xmc_probe,
-	.remove		= xmc_remove,
+	.remove		= (void *)xmc_remove,
 	.driver		= {
 		.name = XOCL_DEVNAME(XOCL_XMC),
 		.owner = THIS_MODULE,
@@ -5589,7 +5589,7 @@ out:
 #endif
 
 #ifdef XMC_QSFP
-static inline ssize_t
+inline static ssize_t
 xmc_qsfp_i2c_write(struct xocl_xmc *xmc, int port, char *buffer, loff_t off, size_t count)
 {
 	u32 page, level, offset;

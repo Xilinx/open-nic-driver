@@ -19,6 +19,7 @@
 #define	_XOCL_DRV_H_
 
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0)
 #include <drm/drm_backport.h>
 #endif
