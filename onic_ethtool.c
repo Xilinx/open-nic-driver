@@ -56,6 +56,14 @@ struct onic_stats {
 	.stat1_offset = _stat1, \
 }
 
+#define _STAT_ONIC64(_name, _stat0, _stat1) { \
+	.stat_string = _name, \
+	.type = ONIC_STATS, \
+	.sizeof_stat = sizeof(u64), \
+	.stat0_offset = _stat0, \
+	.stat1_offset = _stat1, \
+}
+
 
 #define _STAT_NETDEV(_name,_stat) {\
 	.stat_string = _name, \
@@ -243,19 +251,19 @@ static const struct onic_stats onic_gstrings_stats[] = {
     _STAT_ONIC("stat_rx_truncated",
           CMAC_OFFSET_STAT_RX_TRUNCATED(0),
           CMAC_OFFSET_STAT_RX_TRUNCATED(1)),
-    _STAT_ONIC("stat_adapt_tx_sent",
+    _STAT_ONIC64("stat_adapt_tx_sent",
           CMAC_ADPT_OFFSET_TX_PKT_RECV(0),
           CMAC_ADPT_OFFSET_TX_PKT_RECV(1)),
-    _STAT_ONIC("stat_adapt_tx_drop",
+    _STAT_ONIC64("stat_adapt_tx_drop",
           CMAC_ADPT_OFFSET_TX_PKT_DROP(0),
           CMAC_ADPT_OFFSET_TX_PKT_DROP(1)),
-    _STAT_ONIC("stat_adapt_rx_recv",
+    _STAT_ONIC64("stat_adapt_rx_recv",
           CMAC_ADPT_OFFSET_RX_PKT_RECV(0),
           CMAC_ADPT_OFFSET_RX_PKT_RECV(1)),
-    _STAT_ONIC("stat_adapt_rx_drop",
+    _STAT_ONIC64("stat_adapt_rx_drop",
           CMAC_ADPT_OFFSET_RX_PKT_DROP(0),
           CMAC_ADPT_OFFSET_RX_PKT_DROP(1)),
-    _STAT_ONIC("stat_adapt_rx_error",
+    _STAT_ONIC64("stat_adapt_rx_error",
           CMAC_ADPT_OFFSET_RX_PKT_ERROR(0),
           CMAC_ADPT_OFFSET_RX_PKT_ERROR(1)),
 
@@ -311,6 +319,22 @@ static u32 onic_get_link(struct net_device *netdev)
     return (carrier_ok && val);
 }
 
+/*
+ * The packet adapter counters are 64 bits wide, with the upper word at +0x4.
+ * Read the upper word again in case the lower word wrapped in between.
+ */
+static u64 onic_read_stat64(struct onic_hardware *hw, u32 off)
+{
+    u32 hi, lo;
+
+    do {
+        hi = onic_read_reg(hw, off + 4);
+        lo = onic_read_reg(hw, off);
+    } while (hi != onic_read_reg(hw, off + 4));
+
+    return ((u64)hi << 32) | lo;
+}
+
 static void onic_get_ethtool_stats(struct net_device *netdev,
             struct ethtool_stats /*__always_unused*/ *stats,
             u64 *data)
@@ -362,7 +386,10 @@ static void onic_get_ethtool_stats(struct net_device *netdev,
           off = onic_gstrings_stats[i].stat0_offset;
         else
           off = onic_gstrings_stats[i].stat1_offset;
-        data[i] = onic_read_reg(hw, off);
+        if (onic_gstrings_stats[i].sizeof_stat == sizeof(u64))
+          data[i] = onic_read_stat64(hw, off);
+        else
+          data[i] = onic_read_reg(hw, off);
       } else {
         switch (onic_gstrings_stats[i].stat0_offset) {
 
